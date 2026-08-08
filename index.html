@@ -1,0 +1,2137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#08214C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Harsha MGN — Store Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   Harsha MGN — Store Control
+   Material 3 structure, brand palette sampled from the logo.
+   ============================================================ */
+:root{
+  --brand-red:#EC0021; --brand-navy:#08214C;
+  --primary:#0E3573; --on-primary:#FFFFFF;
+  --primary-container:#D9E4F7; --on-primary-container:#061B3E;
+  --secondary-container:#E4EAF4; --on-secondary-container:#152845;
+
+  --tertiary:#2E7D52; --tertiary-container:#D6EDDF; --on-tertiary-container:#0C3A22;
+  --warn:#96560B;     --warn-container:#FBE4CD;     --on-warn-container:#4A2704;
+  --error:#B3261E;    --error-container:#F9DEDC;    --on-error-container:#410E0B;
+
+  --surface:#FFFFFF; --sc-low:#F7F9FC; --sc:#F0F4F9; --sc-high:#E9EEF6;
+  --on-surface:#141920; --on-surface-var:#4A5361; --on-surface-dim:#646E7C;
+  --outline:#6E7887; --outline-var:#D8DEE7;
+  --inverse-surface:#1E242C; --inverse-on-surface:#F2F4F7;
+
+  --e1:0 1px 2px rgba(8,33,76,.07), 0 4px 14px -6px rgba(8,33,76,.16);
+  --e2:0 2px 4px rgba(8,33,76,.09), 0 10px 26px -8px rgba(8,33,76,.22);
+  --e3:0 4px 8px rgba(8,33,76,.12), 0 18px 40px -12px rgba(8,33,76,.32);
+
+  --grad-app:linear-gradient(135deg,#0E3573 0%,#123F86 46%,#08214C 100%);
+  --grad-page:linear-gradient(180deg,#FBFCFE 0%,#EFF4FB 44%,#E7EEF8 100%);
+  --grad-rule:linear-gradient(90deg,var(--brand-red) 0 78px,#0E3573 78px 100%);
+  --grad-sheen:linear-gradient(120deg,rgba(255,255,255,0) 0%,rgba(255,255,255,.6) 50%,rgba(255,255,255,0) 100%);
+
+  --body:'Roboto',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --display:'Roboto',system-ui,sans-serif;
+  --mono:'Roboto Mono',ui-monospace,Menlo,Consolas,monospace;
+  --r:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{min-height:100vh;color:var(--on-surface);font-family:var(--body);font-size:14px;
+  line-height:1.5;-webkit-font-smoothing:antialiased;background:#F2F6FC}
+/* wallpaper: five soft blooms in the brand family, pinned behind
+   everything so it never competes with the state colours on top */
+body::before{content:'';position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:
+    radial-gradient(900px 520px at 10% -10%, rgba(236,0,33,.13), transparent 60%),
+    radial-gradient(1020px 560px at 90% -14%, rgba(14,53,115,.20), transparent 62%),
+    radial-gradient(780px 640px at 84% 40%, rgba(13,148,136,.10), transparent 64%),
+    radial-gradient(720px 600px at 4% 74%, rgba(109,40,217,.08), transparent 62%),
+    radial-gradient(900px 520px at 50% 104%, rgba(236,0,33,.07), transparent 60%),
+    linear-gradient(178deg,#FDFEFF 0%,#F3F7FD 46%,#EAF1FA 100%);}
+button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit}
+:focus-visible{outline:3px solid var(--primary);outline-offset:2px;border-radius:6px}
+.wrap{max-width:1160px;margin:0 auto;padding:0 18px 108px}
+
+/* ---------------- masthead ---------------- */
+.mast{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:18px 4px 14px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:16px;min-width:0}
+.logo{height:42px;width:auto;display:block;flex:0 0 auto}
+.brandtext{display:flex;flex-direction:column;padding-left:16px;border-left:1px solid var(--outline-var)}
+.mast h1{font-family:var(--display);font-weight:500;font-size:20px;margin:0;
+  color:var(--brand-navy);line-height:1.2}
+.mast .sub{display:block;font-size:12.5px;font-weight:400;color:var(--on-surface-dim);margin-top:1px}
+.brandrule{height:4px;border-radius:2px;background:var(--grad-rule);margin-bottom:18px}
+.link{font-size:12.5px;text-align:right;color:var(--on-surface-var);line-height:1.45;
+  background:rgba(255,255,255,.78);border:1px solid var(--outline-var);border-radius:16px;
+  padding:9px 15px;backdrop-filter:blur(8px)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--tertiary);margin-right:7px}
+.dot.warn{background:var(--warn)} .dot.bad{background:var(--error)}
+
+/* ---------------- scan bay ---------------- */
+.bay{position:relative;background:var(--surface);border-radius:28px;box-shadow:var(--e2);
+  overflow:hidden}
+.bay::before{content:'';position:absolute;top:0;left:0;right:0;height:5px;background:var(--grad-rule);z-index:2}
+.bay::after{content:'';position:absolute;top:0;right:-28%;width:58%;height:100%;
+  background:var(--grad-sheen);transform:skewX(-18deg);pointer-events:none;opacity:.45}
+.modes{display:flex;margin:21px 18px 0;border:1px solid var(--outline);border-radius:20px;overflow:hidden}
+.modes button{flex:1;background:transparent;border:0;border-right:1px solid var(--outline);
+  padding:10px 4px;cursor:pointer;font-size:13px;font-weight:500;color:var(--on-surface);
+  text-transform:none;transition:background .14s}
+.modes button:last-child{border-right:0}
+.modes button:hover{background:rgba(14,53,115,.07)}
+.modes button[aria-pressed="true"]{background:var(--secondary-container);color:var(--on-secondary-container);font-weight:600}
+.modes button[data-mode="IN"][aria-pressed="true"]{background:var(--tertiary-container);color:var(--on-tertiary-container)}
+.modes button[data-mode="OUT"][aria-pressed="true"]{background:var(--warn-container);color:var(--on-warn-container)}
+.modes button[data-mode="COUNT"][aria-pressed="true"]{background:var(--primary-container);color:var(--on-primary-container)}
+
+.bayin{padding:16px 18px;display:flex;gap:11px;align-items:stretch;flex-wrap:wrap;position:relative;z-index:1}
+#scanInput{flex:1 1 200px;min-width:0;font-family:var(--mono);font-size:19px;font-weight:500;
+  letter-spacing:.03em;padding:13px 16px;border:1px solid var(--outline);border-radius:12px;
+  background:var(--surface);color:var(--on-surface)}
+#scanInput::placeholder{color:var(--on-surface-dim);font-family:var(--body);font-weight:400;letter-spacing:0}
+#scanInput:focus{border-color:var(--primary);border-width:2px;padding:12px 15px;outline:none}
+#scanQty{width:102px;font-family:var(--mono);font-size:19px;text-align:right;padding:13px 14px;
+  border:1px solid var(--outline);border-radius:12px;background:var(--surface)}
+#scanQty:focus{border-color:var(--primary);border-width:2px;padding:12px 13px;outline:none}
+#qtyMode{flex:0 0 auto;background:var(--sc-high);color:var(--on-surface);border:1px solid var(--outline);
+  border-radius:20px;padding:0 18px;height:48px;font-size:13px;font-weight:500;cursor:pointer;min-width:92px}
+#qtyMode[data-mode="base"]{background:var(--primary-container);color:var(--on-primary-container);border-color:transparent}
+body.simple #qtyMode{display:none}
+#camBtn{flex:0 0 auto;background:var(--grad-app);color:#fff;border:0;border-radius:20px;
+  padding:0 24px;height:48px;font-size:14px;font-weight:500;cursor:pointer;box-shadow:var(--e1);
+  transition:box-shadow .15s,filter .15s}
+#camBtn:hover{box-shadow:var(--e2);filter:brightness(1.09)}
+#camBtn[data-on="1"]{background:linear-gradient(135deg,#EC0021,#A8151C)}
+
+.camwrap{display:none;position:relative;background:#000;margin:0 18px;border-radius:16px;overflow:hidden;z-index:1}
+.camwrap.on{display:block}
+#video{width:100%;max-height:54vh;display:block;object-fit:cover}
+.reticle{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center}
+.reticle i{display:block;width:min(70%,320px);aspect-ratio:1.2;border:3px solid rgba(255,255,255,.92);
+  border-radius:16px;box-shadow:0 0 0 100vmax rgba(0,0,0,.46)}
+.camtools{position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;padding:12px;
+  justify-content:space-between;align-items:center}
+.camtools button,.camtools select{background:rgba(30,36,44,.9);color:#fff;border:0;border-radius:16px;
+  padding:8px 15px;font-size:13px;font-weight:500;cursor:pointer}
+.camnote{margin:12px 18px 0;padding:12px 15px;background:var(--sc);border-radius:12px;
+  font-size:12.5px;color:var(--on-surface-var);position:relative;z-index:1}
+
+.result{margin:16px 18px 18px;padding:20px;border-radius:16px;background:var(--sc);min-height:104px;
+  transition:background .18s;position:relative;z-index:1}
+.result.ok{background:var(--tertiary-container);color:var(--on-tertiary-container)}
+.result.bad{background:var(--error-container);color:var(--on-error-container)}
+.result.info{background:var(--primary-container);color:var(--on-primary-container)}
+.rnm{font-family:var(--display);font-size:21px;font-weight:500;line-height:1.25}
+.rcd{font-family:var(--mono);font-size:12px;opacity:.76;margin-top:4px}
+.math{display:flex;align-items:baseline;gap:12px;margin-top:14px;flex-wrap:wrap}
+.math .was{font-family:var(--mono);font-size:16px;opacity:.55;text-decoration:line-through}
+.math .now{font-family:var(--display);font-size:38px;font-weight:400;line-height:1;letter-spacing:-.015em}
+.math .un{font-size:13px;opacity:.8}
+.idle{font-size:14px;color:var(--on-surface-dim);margin:0}
+
+.tag{display:inline-flex;align-items:center;font-size:11.5px;font-weight:500;letter-spacing:.02em;
+  padding:4px 11px;border-radius:8px;text-transform:none;
+  background:var(--secondary-container);color:var(--on-secondary-container)}
+.tag.in{background:var(--tertiary-container);color:var(--on-tertiary-container)}
+.tag.out{background:var(--warn-container);color:var(--on-warn-container)}
+.tag.adj,.tag.look{background:var(--primary-container);color:var(--on-primary-container)}
+.tag.err{background:var(--error);color:#fff}
+
+/* ---------------- navigation ---------------- */
+nav.tabs{display:flex;margin:24px 0 0;gap:4px;border-bottom:1px solid var(--outline-var)}
+nav.tabs button{background:0;border:0;padding:0 16px;height:48px;cursor:pointer;white-space:nowrap;
+  display:flex;align-items:center;gap:9px;position:relative;font-size:14px;font-weight:500;
+  color:var(--on-surface-var);text-transform:none;
+  border-radius:12px 12px 0 0;transition:background .14s,color .14s}
+nav.tabs button svg{width:18px;height:18px;flex:0 0 18px;stroke:currentColor;fill:none;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav.tabs button:hover{background:rgba(14,53,115,.07);color:var(--on-surface)}
+nav.tabs button[aria-selected="true"]{color:var(--brand-navy);font-weight:600}
+nav.tabs button[aria-selected="true"]::after{content:'';position:absolute;left:8px;right:8px;bottom:0;
+  height:3px;background:var(--brand-red);border-radius:3px 3px 0 0}
+nav.tabs .navgap{flex:1}
+
+#botNav{position:fixed;left:0;right:0;bottom:0;z-index:60;display:none;
+  background:rgba(248,250,253,.95);backdrop-filter:blur(14px);
+  border-top:1px solid var(--outline-var);box-shadow:0 -2px 14px rgba(8,33,76,.09);
+  padding-bottom:env(safe-area-inset-bottom,0px)}
+#botNav .items{display:flex;padding:10px 4px 14px}
+#botNav button{flex:1;background:0;border:0;padding:0;cursor:pointer;position:relative;
+  display:flex;flex-direction:column;align-items:center;gap:4px;color:var(--on-surface-var);
+  font-size:12px;font-weight:500;text-transform:none}
+#botNav button svg{width:24px;height:24px;stroke:currentColor;fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;margin:4px 0}
+#botNav button::before{content:'';position:absolute;top:0;left:50%;
+  transform:translateX(-50%) scaleX(.42);width:64px;height:32px;border-radius:16px;
+  background:var(--secondary-container);opacity:0;transition:opacity .18s,transform .18s}
+#botNav button[aria-selected="true"]{color:var(--on-secondary-container)}
+#botNav button[aria-selected="true"]::before{opacity:1;transform:translateX(-50%) scaleX(1)}
+#botNav button[aria-selected="true"] svg{stroke-width:2.1}
+
+#sheetBg{position:fixed;inset:0;background:rgba(8,33,76,.34);z-index:70;display:none}
+#sheetBg.on{display:block}
+#sheet{position:fixed;left:0;right:0;bottom:0;z-index:71;background:var(--sc-low);
+  border-radius:28px 28px 0 0;transform:translateY(100%);
+  transition:transform .22s cubic-bezier(.2,0,0,1);box-shadow:var(--e3);
+  padding:6px 12px calc(20px + env(safe-area-inset-bottom,0px))}
+#sheet.on{transform:translateY(0)}
+#sheet .grab{width:32px;height:4px;border-radius:2px;background:var(--outline-var);margin:8px auto 14px}
+#sheet button{width:100%;background:0;border:0;padding:14px 16px;cursor:pointer;border-radius:28px;
+  display:flex;align-items:center;gap:14px;text-align:left;font-size:15px;font-weight:500;
+  color:var(--on-surface);text-transform:none;transition:background .14s}
+#sheet button:hover{background:var(--sc-high)}
+#sheet button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;
+  stroke-linecap:round;stroke-linejoin:round;color:var(--on-surface-var)}
+
+body.simple.locked nav.tabs{display:none}
+.lockmsg{font-size:12.5px;color:var(--on-surface-dim);text-align:center;padding:10px 12px 0}
+@media (max-width:899px){ nav.tabs{display:none} #botNav{display:block} }
+
+section.view{display:none;padding-top:20px}
+section.view.on{display:block;animation:viewin .22s cubic-bezier(.2,0,0,1)}
+@keyframes viewin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+/* ---------------- surfaces ---------------- */
+.card{background:rgba(255,255,255,.93);border:1px solid rgba(255,255,255,.9);
+  border-radius:var(--r);padding:22px;box-shadow:var(--e1);backdrop-filter:blur(8px);
+  transition:box-shadow .2s cubic-bezier(.2,0,0,1),transform .2s cubic-bezier(.2,0,0,1)}
+.card+.card{margin-top:15px}
+h2.sec{font-family:var(--display);font-size:16px;font-weight:500;margin:0 0 16px;color:var(--on-surface)}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:15px}
+label.f{display:flex;flex-direction:column;gap:6px}
+label.f>span{font-size:12.5px;font-weight:500;color:var(--on-surface-dim);text-transform:none}
+label.f input,label.f select,label.f textarea{border:1px solid var(--outline);border-radius:10px;
+  padding:11px 14px;background:var(--surface);font-size:15px;transition:border-color .12s}
+label.f input:focus,label.f select:focus,label.f textarea:focus{border-color:var(--primary);
+  border-width:2px;padding:10px 13px;outline:none}
+label.f input[type=number]{font-family:var(--mono);text-align:right}
+.req>span::after{content:' *';color:var(--error)}
+.txt{border:1px solid var(--outline);border-radius:10px;padding:11px 14px;background:var(--surface);font-size:15px}
+.txt:focus{border-color:var(--primary);border-width:2px;padding:10px 13px;outline:none}
+
+.btn{border:0;background:var(--grad-app);color:#fff;border-radius:20px;height:40px;padding:0 24px;
+  cursor:pointer;font-size:14px;font-weight:500;text-transform:none;
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  transition:box-shadow .16s,transform .16s,filter .16s}
+.btn:hover{box-shadow:var(--e2);filter:brightness(1.09)}
+.btn.blue{background:var(--grad-app)}
+.btn.ghost{background:transparent;color:var(--primary);border:1px solid var(--outline);box-shadow:none}
+.btn.ghost:hover{background:rgba(14,53,115,.08);box-shadow:none;filter:none}
+.btn.red{background:transparent;color:var(--error);border:1px solid var(--error);box-shadow:none}
+.btn.red:hover{background:rgba(179,38,30,.08);box-shadow:none;filter:none}
+.btn.sm{height:32px;padding:0 15px;font-size:13px;border-radius:16px}
+.btn:disabled{opacity:.38;cursor:not-allowed;box-shadow:none}
+
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.spread{justify-content:space-between} .mt{margin-top:17px}
+.hint{font-size:12.5px;color:var(--on-surface-dim)}
+
+/* ---------------- data ---------------- */
+.tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:12px;background:var(--sc-low)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{font-size:12px;font-weight:500;color:var(--on-surface-var);text-transform:none;text-align:left;
+  padding:12px 14px;border-bottom:1px solid var(--outline-var);white-space:nowrap;background:var(--sc)}
+td{padding:12px 14px;border-bottom:1px solid var(--outline-var);vertical-align:middle}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--sc-high)}
+td.num,th.num{text-align:right;font-family:var(--mono)}
+tr.low td{background:var(--warn-container)}
+tr.low:hover td{background:#F6D7B7}
+.code{font-family:var(--mono);font-size:13px}
+.pill{display:inline-block;font-size:11px;font-weight:500;text-transform:none;
+  background:var(--warn-container);color:var(--on-warn-container);padding:3px 9px;border-radius:8px;
+  border:0;white-space:nowrap}
+.pill.exp{background:var(--error-container);color:var(--on-error-container)}
+.empty{padding:48px 16px;text-align:center;color:var(--on-surface-dim);font-size:14px}
+.empty b{display:block;font-family:var(--display);font-size:18px;font-weight:400;color:var(--on-surface);
+  text-transform:none;margin-bottom:7px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px;background:none;border:0}
+.stat{background:linear-gradient(160deg,rgba(255,255,255,.97),rgba(240,246,254,.92));
+  border:1px solid rgba(255,255,255,.9);border-radius:var(--r);
+  padding:17px 19px;box-shadow:var(--e1);transition:box-shadow .18s,transform .18s;
+  position:relative;overflow:hidden}
+.stat::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad-app);opacity:.5}
+.stat.alert::after{background:linear-gradient(90deg,#EC0021,#96560B);opacity:.9}
+.stat .k{font-size:12.5px;font-weight:500;color:var(--on-surface-dim);text-transform:none}
+.stat .v{font-family:var(--display);font-size:31px;font-weight:400;line-height:1.15;margin-top:5px;
+  letter-spacing:-.015em;color:var(--on-surface)}
+.stat.alert{background:var(--warn-container);border-color:#F3D6B6}
+.stat.alert .k,.stat.alert .v{color:var(--on-warn-container)}
+
+/* ---------------- simple mode ---------------- */
+body.simple .modes,body.simple #scanQty{display:none}
+.bigrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+.big{border:0;border-radius:20px;padding:28px 10px;cursor:pointer;box-shadow:var(--e1);
+  font-family:var(--display);font-size:19px;font-weight:500;text-transform:none;line-height:1.2;
+  transition:box-shadow .16s,transform .16s}
+.big small{display:block;font-size:12.5px;font-weight:400;opacity:.8;margin-top:6px}
+.big.in{background:var(--tertiary-container);color:var(--on-tertiary-container)}
+.big.out{background:var(--warn-container);color:var(--on-warn-container)}
+.big.grey{background:var(--sc-high);color:var(--on-surface-var);box-shadow:none}
+.cdot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;
+  vertical-align:baseline;flex:0 0 9px}
+.cchip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:500;
+  padding:4px 11px 4px 9px;border-radius:8px;white-space:nowrap;
+  color:var(--cc);background:color-mix(in srgb,var(--cc) 12%,#fff);
+  border:1px solid color-mix(in srgb,var(--cc) 26%,#fff)}
+.cchip::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--cc)}
+.swatch{width:26px;height:26px;border-radius:7px;border:1px solid var(--outline-var);
+  padding:0;cursor:pointer;background:none}
+.bar2{height:8px;border-radius:4px;background:rgba(0,0,0,.09);margin-top:12px;overflow:hidden}
+.bar2 i{display:block;height:100%;background:currentColor;opacity:.65;border-radius:4px;
+  transition:width .25s cubic-bezier(.2,0,0,1)}
+.unitsw{display:flex;border:1px solid var(--outline);border-radius:20px;overflow:hidden;margin-top:16px}
+.unitsw button{flex:1;background:transparent;border:0;border-right:1px solid var(--outline);
+  padding:11px 4px;cursor:pointer;font-size:14px;font-weight:500;color:var(--on-surface)}
+.unitsw button:last-child{border-right:0}
+.unitsw button[aria-pressed="true"]{background:var(--primary-container);color:var(--on-primary-container);font-weight:600}
+.pad{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-top:15px}
+.pad button{border:0;background:var(--surface);border-radius:16px;padding:19px 0;cursor:pointer;
+  font-family:var(--mono);font-size:23px;font-weight:500;color:var(--on-surface);box-shadow:var(--e1)}
+.pad button:active{background:var(--sc-high)}
+.qtybox{font-family:var(--display);font-size:44px;font-weight:400;text-align:right;padding:13px 18px;
+  border:0;border-radius:16px;background:var(--surface);margin-top:15px;line-height:1.1;
+  letter-spacing:-.015em;box-shadow:var(--e1)}
+.confirm{width:100%;margin-top:12px;border:0;border-radius:20px;padding:20px;cursor:pointer;
+  font-family:var(--display);font-size:18px;font-weight:500;text-transform:none;color:#fff;box-shadow:var(--e1)}
+.confirm.in{background:var(--tertiary)} .confirm.out{background:var(--warn)}
+
+/* ---------------- interaction ---------------- */
+.btn,.big,.confirm,.pad button,.modes button,nav.tabs button,#botNav button,
+#sheet button,#camBtn,.lsel{position:relative;overflow:hidden}
+.ripple{position:absolute;border-radius:50%;pointer-events:none;transform:scale(0);
+  background:currentColor;opacity:.2;animation:rip .5s cubic-bezier(.2,0,0,1) forwards}
+@keyframes rip{to{transform:scale(1);opacity:0}}
+@media (hover:hover) and (pointer:fine){
+  .card:hover{box-shadow:var(--e2);transform:translateY(-2px)}
+  .stat:hover{box-shadow:var(--e2);transform:translateY(-2px)}
+  .btn:hover{transform:translateY(-1px)} .btn:active{transform:translateY(0)}
+  .big:hover{box-shadow:var(--e2);transform:translateY(-2px)}
+}
+#tip{position:fixed;z-index:120;pointer-events:none;opacity:0;
+  transform:translateY(4px) scale(.97);transform-origin:top center;
+  transition:opacity .14s ease,transform .14s cubic-bezier(.2,0,0,1);
+  background:var(--surface);color:var(--on-surface);border-radius:12px;padding:11px 15px;
+  max-width:266px;box-shadow:var(--e3);border-top:3px solid var(--brand-red)}
+#tip.on{opacity:1;transform:translateY(0) scale(1)}
+#tip .t{font-size:13.5px;font-weight:600;line-height:1.28;color:var(--brand-navy)}
+#tip .d{font-size:12.5px;font-weight:400;color:var(--on-surface-var);margin-top:4px;line-height:1.4}
+@media (prefers-reduced-motion:reduce){
+  #tip,#sheet{transition:none} .ripple{animation-duration:.01ms}
+  section.view.on{animation:none}
+  .card:hover,.stat:hover,.btn:hover,.big:hover{transform:none}
+}
+
+/* ---------------- labels (geometry untouched) ---------------- */
+.labelgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.label{border:1px solid #000;background:#fff;color:#000;padding:7px 8px 5px;
+  display:flex;flex-direction:column;gap:3px;break-inside:avoid}
+.label .top{display:flex;gap:7px;align-items:flex-start}
+.label .qr{flex:0 0 54px;width:54px}
+.label .qr svg{width:100%;display:block}
+.label .lnm{font-family:var(--display);font-size:11.5px;font-weight:700;line-height:1.15;text-transform:uppercase;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.label .lmeta{font-family:var(--mono);font-size:8px;color:#333;letter-spacing:.05em;text-transform:uppercase;margin-top:2px}
+.label .bar svg{width:100%;height:32px;display:block}
+.label .lcode{font-family:var(--mono);font-size:9.5px;letter-spacing:.15em;text-align:center;font-weight:500}
+.lsel{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--on-surface-var);
+  background:var(--sc);border-radius:16px;padding:5px 13px}
+.lsel input{width:18px;height:18px;accent-color:var(--primary)}
+
+.label.mini{width:25mm;height:15mm;padding:0.6mm;gap:0;display:flex;flex-direction:row;align-items:center;
+  overflow:hidden;border:1px solid #000;background:#fff;color:#000}
+.label.mini .qr{flex:0 0 13.2mm;width:13.2mm;height:13.2mm}
+.label.mini .qr svg{width:13.2mm;height:13.2mm;display:block}
+.label.mini .side{flex:1 1 auto;min-width:0;padding-left:0.6mm;display:flex;flex-direction:column;
+  justify-content:center;gap:0.3mm}
+.label.mini .lnm{font-family:var(--display);font-weight:700;font-size:1.75mm;line-height:1.05;
+  text-transform:uppercase;letter-spacing:0;overflow:hidden;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-word}
+.label.mini .lcode{font-family:var(--mono);font-weight:600;font-size:1.6mm;line-height:1.05;
+  letter-spacing:.02em;text-align:left;white-space:nowrap;overflow:hidden}
+.label.mini .lmeta{font-family:var(--mono);font-size:1.35mm;line-height:1.05;color:#000;
+  text-transform:uppercase;white-space:nowrap;overflow:hidden;margin:0}
+.labelgrid.minigrid{grid-template-columns:repeat(auto-fill,minmax(25mm,25mm));gap:12px;align-items:start}
+.labelgrid.minigrid .lsel{font-size:11px;padding:3px 10px;margin-bottom:6px}
+.minihold{display:flex;flex-direction:column;align-items:flex-start}
+#printArea{display:none}
+
+#toast{position:fixed;left:50%;bottom:94px;transform:translateX(-50%);
+  background:var(--inverse-surface);color:var(--inverse-on-surface);font-size:14px;
+  padding:14px 19px;border-radius:6px;box-shadow:var(--e3);z-index:99;
+  opacity:0;pointer-events:none;transition:opacity .18s;max-width:92vw}
+#toast.on{opacity:1} #toast.bad{background:var(--error);color:#fff}
+@media (min-width:900px){#toast{left:24px;bottom:24px;transform:none;max-width:420px}}
+
+@media (max-width:640px){
+  .wrap{padding:0 13px 108px}
+  .logo{height:34px} .brandtext{padding-left:13px} .mast h1{font-size:18px}
+  .bay{border-radius:22px} .card{padding:17px;border-radius:14px}
+  .modes{margin:19px 14px 0} .bayin{padding:14px} .result{margin:14px}
+  #scanInput,#scanQty{font-size:17px}
+  .stats{grid-template-columns:repeat(2,1fr)}
+  .labelgrid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
+}
+@media print{
+  body{background:#fff}
+  body::before,.brandrule{display:none!important}
+  .wrap,#toast,#tip,#botNav,#sheet,#sheetBg{display:none!important}
+  #printArea{display:block!important;padding:4mm}
+  .labelgrid{grid-template-columns:repeat(3,1fr);gap:3mm}
+  .labelgrid.minigrid{grid-template-columns:repeat(4,25mm);gap:2mm;justify-content:start}
+  .label{border:1px solid #000} .lsel{display:none}
+  .label.mini{page-break-inside:avoid;break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <div class="brand">
+    <img class="logo" alt="Harsha MGN — two &amp; three wheeler spares"
+         src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAjAAAADaCAMAAACPb4iQAAAAP1BMVEUAAADsACINI0z3BQrmCRXkEB/1+fkHEzf19/i2AAOjp6vlJ1iVnadxcnRQWnBRX3UAAAAAAAAAAAAAAAAAAACoUJAuAAAAEHRSTlMA/PcJoWAM/PwDEw9RA6Vu14nQ+QAAIPRJREFUeNrtXYvao6oOpY3ioNW+/9tu5Q5qm2DEzmz5zpnd31rFsEhWLqAQURv0/2yDQYjdL/WB7ASI/ju0bdO0rT86nzukvxzSS2XXutvvNxDNY26tGWIQ7fJXE3Dw0K0FcKh4xK1p3Znzv204PAjlL2Yvrdxfyp3fPKKv73YtDHTDAeaxHtXGo8CCIBxIATM30F+BGJr06LCNxfkv++eQXvpuVzXlkYLBDA4wj8GN+gowGjHznbKjwwKMdgswTsOAP/NuV+oW5bmHgc8RwAR4tOa6W4B5LIMvmvzosAcYsP1yv7ht0qWmaP5/28QUQ3xWM58AE7RAOGJP163xI26v0rQzy20DDvYB436x/Ki/AXMdgxWQTfWZf36cwZ8B066oijnd/diDqY2tS3p0GzCrS9/tCrgMzdpiLC4LlADGEdlooB1gNKdWbtRF+AAw5Ed3AKMv3dw26dLmZ22j2wPBEhxgwLYEMFqDNGAPQQCM4cAzZJy+aT3TXVqzRGNGB5Hk0pb02ts6fXUj5pLmOIX3kiKW8VXDxFbGAEY5t9gajkTDDIPXMAsJsVCFMeJMXqfEcG41RXa/lE3sOd2tqj2CJgy9j8PYg/vBDk9X24jIOg1j1UYYVQ8YkbIV71U3Gq3m7g4VyaWtaXNIae9QzFXe9NC4GK2mF/ofpZyx2NUxsOEnmxF0FslxWwEJYGYVYxUYpBzW+mbZwWAeVYjaDTDEHPpuFaN1wuElw5ELwbeCDhinEoYQoNuIw2gjM6R0u809oRQwKlClm/ZehBc3ArJtXNMJoCXg1nxglvuAccpEOY9mvssGYLw9aTPXDDaieV7DNJYOD3DbpGua92Sy4VkODR+YpftBY50rDwKPQR9vGbY0jL/s/GW7GeldLr1cuPHnO4sUaNAdirlEwcBSm5DO6mamMfbb7ZAviJRFtJ7GWr0ys1VLaU3ecCv16MJASZQ5Sn0nXtIMGAuthQnDX+Yn/RvANk5HK4YtDeAyPdtEIcRhjHcT3BZYGR8JUWogLU6wP49NkwcMgEjjMDuZp7tVRIwVuqW4TaQsFpOkx6r5CBiReMLCa4EsAx2lBprEwdbVUGAy5T5PYC+mAOJsta9syHB9t7oWqdUDrnWNntQJ2d2lvWlqAIJJ2mCsbXCrlVLDw1Fhh54hTVCKrcRU68setqnz3arY1UbP6EF4DaPNgB4X6Z3uz5HeDDAbWmCxSYGkQhLhCWpqGMDHarYBI+SGYzbciKmHFwMYG1izgAkaBpx9aUkapnXcQscAW29/PNdVli6BJ8gu2JMmH9eAAeevm/DibZPqE3czcBFgEq/EDhYJMFlEDXyWKnKOWp8ZcAx59qmco9TsA6ZJjVBz26S6bTDmw2gY2eTuh3BR/k3fdRcwoYxhUQN+VGUADHjeO2wwHoAUMCoAJsmPq5Dp/gFdDf8fDdNsAsbWIZA1TDArcaDn4UBiAAPwyKI2CUHe0TAuDJjC/QdCMQDi/1FoYVlkXK8SBXoFBTAhvNvEq0tEoLUiqb9ro4hemweAU9sD6aUbH0d0WLs6FLOY8+Z/wb0tSqyGsQVUSRxWfQKMyTv5Kl7zlzkan9/aL9rwBdgf2zJQH+ZdSnsh+o0DjP1lfNTYAXuzS8fK5tzg/4GYxlqfiPQ+nNbxbvW5joi51QDtIP9Gze55+//BXbOh/xCtawJ/0FTBpA5gl+lFZM/9tVoK50uy1mdDRhnjD9E1YPMSYuvABSJsczv+TwOmTYMvzVLVEM0Xw05FhUEBMfy9EoxKM/51wICvfJM+0usjb9YiXR3pgB+WX+bjwad1Fv9CUyEh4AAT1eCBKZmDu9R6Vys2q6zZv61kbOZHQyJ4ssMjDq3eodRdsg7bi7n+fdo725/ZgV6a9Wp1hZI1TndR2x5eNiqP/3mFbIOuTbL43gGkjcoQ7vaFvvxvEBNVPkVerYIQ5AcO6bL9+jeyNmq1Fv23iAxeSoBs0aP7CoRofxgRCuOuxssvek2b9OW3iAycdj2f2BlEpGbaByNeGOMTMFwfUZ0J30e8uEKxK/EM6BMVSsGoDcQ8fArIq1sm/aLLc5mGqrmchfvCik/tSrOkSwBQ94evyF8vCxJJuDLZvIEncqnjOkw1CPADeb5d92hlluAyBdPqnQ64ERPrGGjOmiS+BG/gwF57+fI1te8e/Yi3pARhVahCod8WIqlYChlkmpbHIRkY2ZCnDs11JTDwyT16bNSCXdDD4UGoLAM8YtKE8LK7slvwavbeUDzyZSvvj3bcvCz6TFDhRkdXVzJRDSPOPQCsxszmqWWlMPhSGGb5NgfnW1LNeY2rBITp+Mg2uq4H6Ya4CSAMTQGNEXaLDzeXmfwJSNecQZkINmZCe0E5RF5OiiQyVSGTchIUYmyOmeoqOZEAI6PMtN0htZBPbrhg7qKV92X+dW4yBbOrdC6RXzHwA4hZG4PaxBfEUICXuv71KqLYIBHT/gJiNrpRfLuNSVCZ+NLobtLRemYJNqTE7Cqd5/ltSrjQkKxfSVAZMWS6e4VZ2tkIgRcxzVmI2VyVXwRQ2HP96rlKx/Ay91TW8K+3g3DszvU5Ut+j3kUAvbpWSYljeNFm6XRw70sJ51w/ypzrcxykQwDdn9511hqU0t26+etPUjovq3R+7+l5yE+PUmcFDDwY2slE5rCUSM411MML+XYf40rN+YhhwkteB8tOAeDTnU/MKlWQMQkx8JmOne0qgTpKX6oEG1mkdJmrtOMglVGPbwN27m4fR92jWkQGWKR0lasE8tt98VHa7xP8TOe6LBtQn8gAQkoKJe2mPvEFxF3RKu2jaT7duWZxjyrkr5WAcnOYbpwg6rtKKL2GVGm4BziLGrDR3ZPN0lcKgK9HwkxQ5nmKNPqc8cdzXCVm+nKeWQIk9Rh+0rlG3xBjVLEk7AxXiYaXVhJsV8NrRBWrlEiZ65PDAVSVhvdo2zPWbTUkM0NSR5z5a4qUeF0lu4P7+QQGqdIoFILbuSbRXbPOmFrtC1w9pUgJY5SUxDvXqiJevlGPtL6zLvEljb6N4IKQLelHPEv7gF9K9VwlIk38iBgAWgiEEzEkvPjFJEQlw9Jht8Mc2ogwP/4xxAxUt+LT7cgheb6STRrdjeiIIhIfjqVatEARzqEc6pRsFoQt9qkH3aflcpVo7lGqJ2jrCo4TmSIp8Rb5lhNfmjX9omNKYmYtU1yAMAirAm8gs+U6DtIP5iFBFaVd9ix5SYy1ZdlrAr8UdnMtLE3JHAr7qkIpKZSabU5GDBSm6bYi1sum8I9LEKOK6O4BJXPALJVmLpCr207OXBfH0bcAqkpzxAdDqEfoS7FVK0UM1UGiIkacWuR7IO+yRsyBix0iBSS8fIzvkwxboVmC8soLVD2SOnM9pDqS181V2pGk38E8JBtfJSmZlnMlBZ9WO9G5LnKQ9mjYsYs1ByiBZKQeIEgbyZB7faz0gn+zIailHVcAJdTwsBJfElXFWBGKkilYtnSsVIfduZaUbOrxOukIMUfBVxhypxhV5PJ6UqqAvJTioJROcK4r4iWK6zNULUERaWfHi5bMQNnfTOHhIg+XjrbsW8egy7SBoZDRkVWWqkgyhwRFqhE4J2xMWLbEsvQFcMSXPQ+ZvV70mFHlqaKl7gpMcmloTjAQHGw0kWGqHeVeQQtYQ/1dIG2LBChGAyIuRnOVSMV1QF/oix/eFoV0rtr05pIVtBi8NKgRaXHgQ12MUoBHqUko2U2KkirA+Nc4XtGyIYbkXAOHdmyQuSHUXGxwsMITX1qJY2HaBO+eftVgOM8FZ7VO2DoGGKQN2ILXoUWBGBXZA/TCJ0pEVhWnfdBM5htiAKmtUaPcIgN4XOshcXgxW0ghzmw4LzbACXT3QBacUNv/6T4ogDfLK0pQo8xf5PsR7hhrCv799gw8zfZHYW0XI909WOxEcJc+3Qmnqu0LcBiJKks4BucgCb6IXFjWAKgX0MD19KVImzUfCicwPQZQ+KeDeq4SzqcBvuhB4/cqR2JVsWUDON4zQXCXdsK+SAfJyhw3yuzrIXcdSbJdOByfhBh9R4kvie4yrWEhKJlyByloVhxiWubM9V7YFCXvxDGHg3nFZNSQiFEfHBd80J5tL28Ck2m3yoXbB2mOcjrX6qBzrQqmOCGV9f25FM5VguN0l3W3hUXJNFF7NNttg8jg8CKTOcrnXBOm+9b1UOtYN35YHtRuSuS3rx7Fj78maw1SLOHNpijKuYbTXSWSg8SRBtkYeiRiDrpH7Pv/+Pe0Kv1GV+Xe66qUfb+rMv8UlUzBqtwVNcoCTt7JF5kRYEycbUwCVFXIpnrEd6L5iddkC+yyr7ZQL7Hvy5q9uPtA4KwQMZv0tSxHQHGP2l/BiyjEC3aUG3ZXKbON5Z5okXO9Q8sUMpVVjhf4Gby0paPO6CoVlmyi7OJ+5KIggNceiXymYKf49le9R7hUZjs+Ie7H2Lf90TcbOlxeQEbMBwtLJVOUtQHwK+YI6yDth1jZ8pAk4qss+yqkmuUBvE91OTTEUAomj0frgC3cNxwacOQ+CQOunIqaVSJmkLYFQCp6/2gZUMKgZVcY6YuMy6nn/w/z/+YPo/lo/hH6w+D+MacuZ8nCjEBhWQGyFFpR1kMCU2UBaXHjFyYBCs2oSDuKwuHk9PGlILbQmZoRKLUk7HlI3SeUg8So2L7Sd2wekuAecWyke3QFp394BrxgBX7K2/54nAs0YtLcyBHECMJzcrhHIFg0DDYj8JkEIC0Jcl9WdI4AVbEPnDEgVGE7ykyOrKX7FQFzyEE6x7mm2Ae8O8UTWsA8gEKViuItL1fxCw+HQUfsgGOKsq0t8pfjsoQoUfDtrtWQdt/g8JDYTBJ6FSBLhwCAj/a22KzAwCNRPhLW1K+A4dIw6rBTTQrHNAPL2iIvdRS6mFbZMhYP6uVMpIXxw68ABhuGQbwcBjica0XCC3Z8FANisCs50bWacOoOP+U1jd9MDXKto2Jiq+2XzdjQPtIAXKFeXKwCFC9eyDv8wG8ABp1KGioghrAds5tzSI6JdJXgYK5YkUr/gLbDD/wGYJDjPLB5xJ+K58l4QcYw0a4SHCS8iBDMENfRk6iv+g3AYJ1rxROz+hDNgKK3eSGd60PhGD68ZAWrUGt5CSdgKOEYjm41h0pr1iZGCcb9Ezb7gC0ZpC9OqraADTgBw4cYHIXeRgzJoQayYjuCGL4y9rWqUiTqq34DMALYwjE4xMithXRoBwmKdncHgELJAtsWj1uTTlWhvtyAUXURs7EAoYTw0sKrEiXstSiAL80O26qVFMODXwAMOhwDPDOtbG3RPmxZneustJiR8O7Ij7SyutBZ4gYMX+K6rEaY9M6tzZtyZq4HMuHFJ+WOpugLiQw7YNDjfEpVOTBs3zDw2NTsAbB7pg6lUCfXg5e+boQbMNj9pwB4ptsjCWChCa8A4LcJHxCDc5BQ+3J+vJQS565oOwEwyK0CBddrQJs4WHuA8JJuigx+eVIBfLuVwLfFC6cSmTMAg4tnMDrXlHQQIhHF61y3FAeJQ7mREKOozhJHpHftNUBdxFgSCkwbr6JiA9iXpGlRYLfwZir8O/EFNSwaBgq3ocJVxwjsU6tDDjVL7GzHKrXIbSdkyeTcSS5QllrTXmEA632laPoFtndMqVodA5SqkIZn51LCi1EU29xF67V6mzkQX4q1VyiKCrsNgstVAgHDAY1YiBicoVFs1eN4A0KkviQdY3aVWv6Zn2xoyeoFjmgG4EMM17b3JhzCOnxcQSfKmx8pG1IVFjyQtqh36kUd6nDDhpgGT3gVknqQQkBH8QLAR5voyciiqC/pBaSf1QslHKMwj36cmZMnKWMeEmVBEHcj4pNSh0ev9S1SL3B8kvItPSkMARwbw9JXx5QFC+kwPIv6Ul7i59WLAg4x4FZKD0yAIZGAgdtKnC+oA0RGkGRD32+LbbUqMIei2GgqOw/9EDY560anUF+6esGaPOJiJTgbMdT3btdBDJbwFnoy7NvflbEXwGIRYycE10ICnsDJSbGRgzV2xVenLEFRcIp6wYuocuaam2+w2dQavkEV6lvGXriJANK5bmvjBVtwcMS5Pt/uAR/1BXLsZe+tWgcZHQoxxxKlZSQAGNdc793hPAJTQGQ+boSnStSLOk/lAsPgHcpbbWcJOKM7ZSGm4ThNYqC+ReqlpOeVFxIwK/WzfF4gmDyWzd6PEpkC9gJlcU2+nUBUsXPdHlnrd56rxFY3hFFlh952Uk29UBBzXgCvPbb+vD1JC2B9SKb0AxB2aIXD7OXIVjQ4xAwAJ+mYgzI/S8fgTCzf5v6i9JUnBbGXgxvqYfMyXNUxXFEvCjOlO9c1ojzJbCPtMq+OqJfh+E5XFwbwDpNGAMUe54HzUo68Mbwy9XJ8k3q+zLUgd59h70h+V4kvpEmbuEQiA3XZywmIoVbHsMxRfucaixfm12ERiIy2K9XZywkuJC2Ax1OxgivyJSCGb9OCE80SiBL1wtZnxRfAw7+0h6+KktdVYtt66ST76p7nKvXCHY7BrykRULP3A3qxUnsVXmjl4WT2wqwNH1yIgcp4QfYeWaiNIzDyrNcF04lsffVC0AwImWMNccvpZMzeOdco496Ped7rpQH4EcPJXsgBvN/U6WzBpIopR4ZEAV69wCn9ZAvHtN/HjlnkTM61qpZy/NgJxtVeDKHdGgG8b1fi5wDAkYfE7pguzm2cZqkV570+nRExX5zrMzgAg3ONi8AIOP8F9lyLd5hCuwdl/l3H5fuanh/0EgybcgDIB+75z288/vWZ6gWPGFxAY6gexDi8k6+6LmK3SWTa31Yv6FmKfFPvcHJGoNjRU8cITB28MBCZ09ULOrSPyrvtPm4znAb74YirhHyplKoFGNr73C5RL1rmuE3kDuxPdSbuD2xPhcSLqNmg3L+uol4IofGhWMecyxmLXSVcbqStZpAOJgpA1OspXwBvKwp2ssiLl0HALxHe1Cw1ReqlYk/ZKpI26qlOF3lh3v3HCG/Ss75g81TFpGGAtqv64cx1jhj+MjUeVwn7FtULAEP2ljiqdi8ImvorpYRX1QiSkrOoUHuRwHneUi3nyDIsGmIQPRuS0YPfgXtiGwfCLvhXNHw2sjJ7YQyzbyl7qCRyKmJ+l8AQvaWa6qUszI5ylaD6FEUWtQxOv2A8agkXAgZnllpxIahRiCHVOlT0SXGl6J7DXrRIgEzNmqpVu6dEGQmIaUS9oPrmiz1Wza6im7v3/Vy4jsAgzdKl6sW174LEKysB1z8Pj0fwi2apgX9KRjNiautL2Gwq/uPbybB98i9q/Z9QL16OKv0n+fBXTdG/v2371+dV7V4HPXUPNksbNkIAV4R27/YXkanUW/oH1cvdTiQy7W3sr2/yx4lMMEuNuNXL3TBKBm718u8bEm5vqRE1Y6GXPu/dGBBzj8rdaDP4Zi93u5X+3e52t7vd7W53u9vd7na3u93tbne7293Ymryf6G53u9vdrlM38t99tL9ZIuPYC9GHJoWc/x3dt/Nn11v9pW39/gNI/dtxfZsxuss4mmuP0cXNZ3dGdAXZJ02uD4Vz476LUfqnsE8Z+mP/SK8jZHZld2r2pP675aOMj4w7gzomo76c6+UQfTOK+E6uC6P7Wopx57lH/bg3W5H/xrN9vuh49BI1pTR39pW2Gfr6X9Ne7rM0h22yV77eYpqWnq5nlD7w7rOD/eo29j7STDn7OTrNaBJhv0x/mh+yJ8qo78vnPur6S3fB65g+9CG5dNbReQ73rm/2SdIz+vQyVhmNa6FM03t6eQ0TzvdPaW4U3Snco/ejtf3c87/v9yT6OjOqe3a2PZdPMxLm/zylUZDLkZfpyTR/NL2Wwv7kOcm1bJ6mTQks49voT7PgxfyfyUrnvXzWv+7CaZOT5TNu9rzkkJXbKF7zRZ+9vqF82kvaruteP18OWvNndz99Cf3/lz7y7Dp3xF6nmyKB9fZLc2v9o94e8N3OhDyZmzz9hIqfcozOMiI29icWhbCCnvxQ6W+X0+b/6RFb/nzXgEyXyX4ZjEXo2iIvX5peyEUmWqPI+CfpbBrF20rx+Yw05Tx+z+dqiKfOSND2Qg9K/0y6Y+T0+gaY51P6qdaZDo/mV0agpuv6uaSbh3pSaHikDy/yDiy/7t77z9K9rHCSX8UyiR/KzpDk9LdDyNP0UDrAZB3RgElu3Wn5TP7vZ23AaIRLNxds/5ae9uLV6U+9eRCP82fMTkcz+8x4ZkLu1oB5RoDRPzO/f0azSEvpK2AWwVnATE656U9Pzc97+8n8p/eKUGbXWdRrejM9fH5MNwHTGcAk3Y5OX57J6O6n+2o0Qo9Pl3redR60AT/+HN3bgA3/3IvmtOdldz6pTdlkfRspviPz4mDceZDPT/Xnj31CGasYfdafuRlhRyZJj9Yznmk5YIyGCQf11Rd7mALGKLX0cpO/1Tv83p5rtZ78Dhj91OnNxB5goh/2BjDJBJTZlNRCMeqst4dsN+ys89JOAROdNC2PMqX3dj8zl48udSqLmZtR30tbJLKM+rTMWdn5EZJGBwjw/bNd7GJMLw/Z/TGASaWmL25kIO2NdgHzJ1xdT8jQO/dTLaUpO2SYozNQMjApZ/vMVyvAiOgyBp3xkR3AvJJ7a8C4bi8y6CNfuAsC61yXOismK8PRXcOLTSbX1IiRVsOI9Lnfnbu8Flglbyma2KMz9n7+OSjM09186Z5j6WKXz6bOiWbt7kWTRqSAmdzUigCjBTBZk5T7dnuisf20yLHS7/QEsA8ZEOcBE1/5tYL6s9vSMOu7um53tgfx6ZG89O26IMROz5XRzshu4USj1zDx3PEykzmniMF3voLRNNYxzHH0UygAZnKaNheNEY7V8lJEcFrJdL7N/D89WeebyHH0gBln11V+B4wcfSDLAUa6MNYYqZjJ6oN3Yi+MK7P8aNTRLpkApvdxt94BZj40n7f8fxswLxd568dscLcA40b0jyOm0aEIC51/5K1rBsCYGKiLaUQzWNQgMZGG6aM/rVTdVHxblfGOFYzRle8kBGXnifFIMw9+X8O8Lek9qmFGr06CdnQ6o090x7aG6Us0zObgjomZdiJ72Sj5M9EwT8ebjSqR3wCTktBwfR13/hbGA26TFAFGaxczTSdHLVPA+Bnh443Wq+42DNIWYExkblvDOCm9/InWnIzZQPeZn2ZvZT2mt/P07KwwumQDMDof4W6mTzMaZpP0yj2TJLrUd7TejjB+ghVUxmGCogjRmvya3Row0tF8rbf+VAz5vlLA2LmoZW9cJhfK2ABMN20F7lb6ZRswjvF34fLBy+l0PChzXHReyroG7lDvIWPv0Ye+SxdAcqwmDt6k3tZCJVY329Ew/lcrpbOKQQkXsXjqdNEYcxjvVElrpfQ3K2F5zyv1kt6G7YSISF8tT5A6ZFL4wEUvzDS1PZYfAeOE43zDD4BxxCkbHZEFNAKcfSTVAyYcTHN7Gh9vBxjvXu8DJonwvJIwzIqp53EY8/RZHEakwSlhIykL8uw3q6d07qG1SXJcxXZEEqOzgekxfq4uj6PW4zBWU5sJ6rAzbWuYZ6QgF6bT+RitFO+xBDDhiHYYzBh2ETosYKJD0bx6dw7h0gNGR4xfZwFG5sHfPPxtsi3mim8h0kfXCZY4gKWDTzvXnPLeOWXcxUKs61Y7uzhJq1uD6MUnDhNiSN4JTDVNDhhtj6e5BdaUDqALx728Hp6/jzSZCEKSaapHD8lkQhmeAVkOo+83JSbJ3lZ4kxQRuS+Aea4Bk1uFxY/qdfroaf01E5yNh1h6v8lKNLvN1K/NuHvuMcFMXycHmQjFCt3QAOun+qD2roYZgz9go+rvNEazxWGm3GMynEQbQv9lGkvrA+ldx+28PTUBd40Cd+k+GUwDmDxMN2ZHdgHjAndC22kvvx361utIrA3rSh8FXeLsL5kNgA+VWlFMz8hNjwN3IYHufKQuCXrX1DB+AtvwRVAwU+ZWxwG/0fP6znLSd6ybP7nViYZ5WSbiWNXK0x1X7nDuZ7rrde5jL9wE2ADMiv/3u9HGD4G7l9MAU2KRZk/9JdIAnHTU1gcjJkdCnBbq/W2k8OmZlVutebCI46hpcq8eYN7BzLuQtc1BJoE7S9HG6CrhePJVAMx7J9IbckQvn6GWqYYRdtJ753e0U01uFVhYTuXvksdhRHCrdQrAhB4dYKTz4WVIGWaACcpNBrXQ5RwmnmIeMPYkUyUHq2S+cCkJnwqb8lCE656eE/H8fVWxSem0GuMYr0w+J2GoP5lDFMAkNhjYd8B4DWMDP3acXitHNdcwa1jGlMhV3SQQjuIwkfoYcw0z7sVhkjvLQEuTagvvE6caWaa3tdrE8vN4omo/SD5Dl9aBu9cSfNgMMlcAzLiKNSRZ1N4HFvMUR8ZhvI4RHzSM/ACYMYhppOWSQg2AH0g3mTGRXrEV6c0Du8/VsESAmVIVsyGVdw4YZ3UsNbGzUPooT6T/p41p2KWXr2mSxlyvy4V/viLwOIdWbJMsL5uktgOnYbqkI729mHTmSftTur2kA4w/lPHMJMcexn8HMM8pvs4rOeK5RHxOduCVAEasbXEmlbViW9G5RaqrYGDwkuL+6g7rcpM/9UlvDhgTTJGxs+gQ09naRhGLpvfFjl3wjCXeSxq9htFut8tsujiMr+4UIQ7TuTqnSP2Mz5DK8hZijGptbNVgFIexAbIpCvp0NtQhXdSjsykPmfxEB/0tix3F2lOyBXe2iMrNi5T02p4tjGzUkWlfuBWX7EUFVFb8nYml7ha0nQwYmet8+9gyr7OIKlqTqT16rvx0WSjjMcgsgpwUx8lYw/S+iiLivauKu1Gsg35jbho1le19MHZMirPkdgHVtDoiVoRUbpZoutsECzLmhNDxqTEDjDZjnVZKMtIngUiPJiAqNktT+7Rk9lUp1PvsurxWS+c+dHfFM62z6H288Z0WgS/d90FaKTa8zyQwHGsYl2II8e1Rx0cXwvpyldq7JZrpvNIV3m87VrbY2/g/nS/DtunR96qgWeQHZF72m5VoPp2GmWy3he1RVoiY5NgiwFh1Z31x3Sd9Mem7LjwpTkuQ9SMsYe+3OzxV0i+if7/fqTe2LFxwa0WWzyKmxEK+nQUdcza6LEARbx2OeulFGfFF38t9PL0U77cbv1F/MWuBt1huO1pBmtN7XQ1vf2v62es/zaF36Gl4HLd8xfzA5MTt/fRf9oH7d9T0bfrowsJeJhzyookO9SsJmR6lQUvhxaIRFOTQL2IR7/Br+9ju6a2shO7MW7yTzthFKtLwuXIH6T/gtYA+olnZMgAAAABJRU5ErkJggg==">
+    <div class="brandtext">
+      <h1>Store Control</h1>
+      <span class="sub">Raw material inventory</span>
+    </div>
+  </div>
+  <div class="link"><span class="dot" id="stDot"></span><span id="stTxt">…</span><br><span id="stCnt"></span></div>
+</header>
+<div class="brandrule" aria-hidden="true"></div>
+
+<!-- ============== SCAN BAY ============== -->
+<div class="bay">
+  <div class="modes" role="group" aria-label="Scan mode">
+    <button data-mode="IN"    aria-pressed="true" data-tip="Receive|Adds to stock. Use when material arrives.">Receive</button>
+    <button data-mode="OUT"   aria-pressed="false" data-tip="Issue|Takes from stock. Use when material goes to the floor.">Issue</button>
+    <button data-mode="COUNT" aria-pressed="false" data-tip="Count|Stocktake. Scan, then type what you actually counted. The gap is logged as a correction.">Count/button>
+    <button data-mode="LOOK"  aria-pressed="false" data-tip="Look up|Shows stock without changing anything.">Look up</button>
+  </div>
+
+  <div class="bayin">
+    <input id="scanInput" placeholder="Scan or type code" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Code">
+    <input id="scanQty" type="number" inputmode="decimal" step="any" min="0" value="1" aria-label="Quantity">
+    <button id="qtyMode" data-mode="pack" data-tip="Packs or pieces|Scanning a roll label usually means one roll. Switch to pieces for part of a pack.">Packs</button>
+    <button id="camBtn" data-on="0" data-tip="Scan with the camera|Reads the QR square and the barcode. Needs the https:// address, not a file on the disk.">Camera</button>
+  </div>
+
+  <div class="camwrap" id="camWrap">
+    <video id="video" playsinline muted></video>
+    <div class="reticle"><i></i></div>
+    <div class="camtools">
+      <select id="camPick" aria-label="Camera"></select>
+      <button id="torchBtn" hidden>Torch</button>
+    </div>
+  </div>
+  <div class="camnote" id="camNote" hidden></div>
+
+  <div class="result" id="result"><p class="idle">Ready to scan. Use a scanner, or tap Camera.</p></div>
+</div>
+
+<nav class="tabs" id="topNav" role="tablist"></nav>
+
+<!-- ---------- STOCK ---------- -->
+<section class="view on" id="v-stock">
+  <div class="stats" id="stats"></div>
+  <div class="card mt">
+    <div class="row spread" style="margin-bottom:10px">
+      <input id="q" class="txt" placeholder="Search item, code, rack…" style="min-width:210px;flex:1">
+      <label class="lsel"><input type="checkbox" id="fLow"> Low only</label>
+      <button class="btn ghost sm" id="csvStock" data-tip="Export stock|One row per material with quantity and value. For purchasing and accounts.">CSV</button>
+    </div>
+    <div class="tablewrap"><table id="tStock"><thead><tr>
+      <th>Code</th><th>Item</th><th class="num">On hand</th><th class="num">Also</th>
+      <th class="num">Reorder below</th><th class="num">Value</th><th>Rack</th><th>Batches</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="empty" id="eStock" style="display:none"><b>Store is empty</b>Create an item first.</div>
+  </div>
+  <div class="card">
+    <h2 class="sec">Needs ordering</h2>
+    <div class="tablewrap"><table id="tLow"><thead><tr>
+      <th>Code</th><th>Item</th><th class="num">On hand</th><th class="num">Reorder below</th><th class="num">Order at least</th><th>Supplier</th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="empty" id="eLow" style="display:none">Nothing below its reorder level.</div>
+  </div>
+</section>
+
+<!-- ---------- ITEMS ---------- -->
+<section class="view" id="v-items">
+  <div class="card">
+    <h2 class="sec" id="itemTitle">Create item</h2>
+    <div class="grid">
+      <label class="f req"><span>Item name</span><input id="fName" placeholder="e.g. 2.8 BL"></label>
+      <label class="f"><span>Item code</span><input id="fCode" class="code" placeholder="auto"
+        data-tip="Item code|Leave blank and it is built from the category rule below."><span class="hint" id="codePrev"></span></label>
+      <label class="f"><span>Category</span><input id="fCat" list="catL"><datalist id="catL"></datalist></label>
+      <label class="f"><span>Counted in</span><input id="fUnit" list="unitL" value="pcs"><datalist id="unitL">
+        <option>pcs</option><option>m</option><option>ft</option><option>roll</option><option>kg</option>
+        <option>g</option><option>L</option><option>ml</option><option>sheet</option></datalist></label>
+      <label class="f"><span>Comes in</span><select id="fPack">
+        <option value="">Loose — no pack</option>
+        <option>roll</option><option>packet</option><option>carton</option>
+        <option>box</option><option>bag</option><option>bundle</option><option>coil</option><option>set</option>
+      </select></label>
+      <label class="f"><span id="fPerLbl">Per pack</span><input id="fPer" type="number" inputmode="decimal" step="any" value="0"
+        data-tip="How many in one pack|A roll of 2.8 BL holds 3000 pcs. A carton of tape holds 24 rolls."><span class="hint" id="packPrev"></span></label>
+      <label class="f"><span>Issued as</span><select id="fWhole"
+        data-tip="How it leaves the store|Whole packs only means a roll goes out as a roll. Any quantity allows part of an opened pack.">
+        <option value="0">Any quantity</option><option value="1">Whole packs only</option></select></label>
+      <label class="f"><span>Each pack tracked?</span><select id="fSerial"
+        data-tip="Track every pack separately|Each physical packet gets its own code and its own running balance, so you can see how much is left in an opened one.">
+        <option value="0">No — one code for the item</option><option value="1">Yes — a code per pack</option></select></label>
+      <label class="f"><span>Reorder when below</span>
+        <div class="row" style="gap:6px;flex-wrap:nowrap">
+          <input id="fMin" type="number" inputmode="decimal" step="any" value="0" style="flex:1;min-width:0">
+          <select id="fMinBasis" class="txt" style="width:104px;padding:11px 8px"><option value="pack">packs</option><option value="base">units</option></select>
+        </div>
+        <span class="hint" id="minPrev"></span></label>
+      <label class="f"><span>Rate per unit</span><input id="fRate" type="number" inputmode="decimal" step="any" value="0"></label>
+      <label class="f"><span>Supplier</span><input id="fSup"></label>
+      <label class="f"><span>Rack / location</span><input id="fLoc" placeholder="A-03"></label>
+      <label class="f"><span>Notes</span><input id="fNote"></label>
+    </div>
+    <div class="row mt">
+      <button class="btn blue" id="saveItem">Save item</button>
+      <button class="btn ghost" id="cancelItem" style="display:none">Cancel</button>
+      <span class="hint" id="itemHint">Opening stock is added on the “New delivery” tab, so it appears in the log.</span>
+    </div>
+  </div>
+  <div class="card">
+    <h2 class="sec">Add many at once</h2>
+    <p class="hint" style="margin:0 0 9px">One material per line. Only the name is needed. Optional extras after commas, in this order:<br>
+      <b>Name, category, pack, per pack, reorder packs, rate</b><br>
+      e.g. <code>2.8 BL, Terminals, roll, 3000, 2, 0.85</code> &nbsp;·&nbsp; <code>2 pin male, Couplers</code> (rest comes from the category rule)</p>
+    <textarea id="bulkTxt" rows="7" class="txt" style="width:100%;font-family:var(--mono);font-size:13px"
+      placeholder="2.8 BL, pcs, Steel, 500, 12.50&#10;MS Angle 40x40, kg, Steel, 200&#10;Cutting oil, L, Consumable"></textarea>
+    <div class="row mt">
+      <button class="btn blue" id="bulkGo" data-tip="Create in bulk|One material per line. Codes are assigned automatically; existing names are skipped.">Create these items</button>
+      <span class="hint" id="bulkHint">Codes are assigned automatically. Names that already exist are skipped.</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">All items</h2>
+    <div class="tablewrap"><table id="tItems"><thead><tr>
+      <th>Code</th><th>Item</th><th>Category</th><th>Packing</th><th class="num">Reorder below</th><th class="num">Rate</th><th>Supplier</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="empty" id="eItems" style="display:none">No items yet.</div>
+  </div>
+</section>
+
+<!-- ---------- NEW DELIVERY ---------- -->
+<section class="view" id="v-recv">
+  <div class="card">
+    <h2 class="sec">Book in a delivery</h2>
+    <p class="hint" style="margin:0 0 11px">Each delivery gets its own batch code and its own label. Same item, different arrival — you keep track of which vendor and which lot the stock on the rack came from.</p>
+    <div class="grid">
+      <label class="f req"><span>Item</span><select id="dItem"></select></label>
+      <label class="f req"><span>Quantity received</span>
+        <div class="row" style="gap:6px;flex-wrap:nowrap">
+          <input id="dQty" type="number" inputmode="decimal" step="any" value="0" style="flex:1;min-width:0">
+          <select id="dUnit" class="txt" style="width:112px;padding:11px 8px"></select>
+        </div><span class="hint" id="dPrev"></span></label>
+      <label class="f"><span>Vendor</span><input id="dVen" list="venL"><datalist id="venL"></datalist></label>
+      <label class="f"><span>Vendor lot / invoice no.</span><input id="dLot"></label>
+      <label class="f"><span>Received on</span><input id="dDate" type="date"></label>
+      <label class="f"><span>Expiry (if any)</span><input id="dExp" type="date"></label>
+      <label class="f"><span>Rate per unit</span><input id="dRate" type="number" inputmode="decimal" step="any" value="0"></label>
+      <label class="f"><span>Labels to print</span><input id="dLbl" type="number" min="0" max="200" value="6"></label>
+    </div>
+    <div class="row mt">
+      <button class="btn blue" id="saveDel" data-tip="Book in the delivery|Creates a batch, logs the quantity, and builds the label in one step.">Book in &amp; make label</button>
+      <span class="hint" id="delHint"></span>
+    </div>
+  </div>
+  <div class="card" id="delPrev" style="display:none">
+    <h2 class="sec">Batch label</h2>
+    <div class="labelgrid" style="max-width:230px" id="delLabel"></div>
+    <div class="row mt"><button class="btn" id="delPrint">Print these labels</button></div>
+  </div>
+</section>
+
+<!-- ---------- LABELS ---------- -->
+<section class="view" id="v-labels">
+  <div class="card">
+    <div class="row spread" style="margin-bottom:10px">
+      <div class="row">
+        <select id="lblKind" class="txt"><option value="item">Item / rack labels</option><option value="batch">Batch labels</option></select>
+        <select id="lblSize" class="txt"><option value="mini">25 × 15 mm — QR only</option><option value="big">Large — QR + barcode</option></select>
+        <button class="btn ghost sm" id="lAll">All</button><button class="btn ghost sm" id="lNone">None</button>
+        <label class="lsel">Copies <input id="lCopies" type="number" min="1" max="200" value="1" class="txt" style="width:66px;font-family:var(--mono);text-align:right"></label>
+      </div>
+      <button class="btn" id="lPrint" data-tip="Print labels|Uses the browser. For thermal labels, export to BarTender instead.">Print</button>
+    </div>
+    <div class="labelgrid" id="lGrid"></div>
+    <div class="empty" id="eLbl" style="display:none">Nothing to print yet.</div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">Send to BarTender</h2>
+    <p class="hint" style="margin:0 0 10px">Exports the ticked labels above as a CSV that BarTender reads through
+      <b>File &rarr; Database Connection Setup &rarr; Text File</b>. One row per label design; the COPIES column
+      holds how many to print. Codes come from here — never type a new one into BarTender.</p>
+    <div class="row">
+      <button class="btn" id="btExport" data-tip="Send to BarTender|Fixed columns for a label template. The COPIES column sets how many print.">Export ticked labels (CSV)</button>
+      <button class="btn ghost" id="btAll" data-tip="Full code registry|Every item and batch code. Use once, when you first set BarTender up.">Export every code (CSV)</button>
+    </div>
+    <div class="tablewrap mt"><table><thead><tr><th>Column</th><th>Holds</th><th>Put it on the label as</th></tr></thead>
+      <tbody style="font-size:12.5px">
+        <tr><td class="code">CODE</td><td>The unique code</td><td>QR object <i>and</i> Code 128 object</td></tr>
+        <tr><td class="code">NAME</td><td>Material name</td><td>Text, large</td></tr>
+        <tr><td class="code">CATEGORY</td><td>Category</td><td>Text, small</td></tr>
+        <tr><td class="code">UNIT</td><td>pcs / kg / L</td><td>Text, small</td></tr>
+        <tr><td class="code">PACK</td><td>roll / packet / carton</td><td>Text, small</td></tr>
+        <tr><td class="code">PERPACK</td><td>How many in one pack</td><td>Text, small</td></tr>
+        <tr><td class="code">RACK</td><td>Location</td><td>Text, small</td></tr>
+        <tr><td class="code">VENDOR</td><td>Vendor (batch labels)</td><td>Text, small</td></tr>
+        <tr><td class="code">LOT</td><td>Vendor lot / invoice</td><td>Text, small</td></tr>
+        <tr><td class="code">RECEIVED</td><td>Delivery date</td><td>Text, small</td></tr>
+        <tr><td class="code">EXPIRY</td><td>Expiry date</td><td>Text, small</td></tr>
+        <tr><td class="code">COPIES</td><td>Labels to print</td><td>Print dialog &rarr; Copies &rarr; database field</td></tr>
+      </tbody></table></div>
+  </div>
+</section>
+
+<!-- ---------- LOG ---------- -->
+<section class="view" id="v-log">
+  <div class="card">
+    <div class="row spread" style="margin-bottom:10px">
+      <input id="qm" class="txt" placeholder="Search log…" style="min-width:200px;flex:1">
+      <button class="btn ghost sm" id="csvLog" data-tip="Export the log|Every movement ever recorded, with time and operator. Your audit trail.">CSV</button>
+    </div>
+    <div class="tablewrap"><table id="tLog"><thead><tr>
+      <th>When</th><th>Code</th><th>Item</th><th>Type</th><th class="num">Qty</th><th>By</th><th>Note</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="empty" id="eLog" style="display:none"><b>No movements</b>Every scan is recorded here and never deleted.</div>
+  </div>
+</section>
+
+<!-- ---------- SETUP ---------- -->
+<section class="view" id="v-setup">
+  <div class="card">
+    <h2 class="sec">Where the data is kept</h2>
+    <div class="row" style="margin-bottom:10px">
+      <select id="backend" class="txt">
+        <option value="local">This device only</option>
+        <option value="cloud">Shared database (Supabase)</option>
+      </select>
+      <span class="hint" id="beHint"></span>
+    </div>
+    <div class="grid" id="cloudCfg" style="display:none">
+      <label class="f"><span>Supabase project URL</span><input id="sbUrl" placeholder="https://xxxx.supabase.co"></label>
+      <label class="f"><span>Supabase anon key</span><input id="sbKey" placeholder="eyJhbGciOi…"></label>
+    </div>
+    <div class="row mt">
+      <button class="btn blue" id="saveBackend">Save &amp; connect</button>
+      <button class="btn ghost" id="testBackend" data-tip="Test the connection|Checks the URL and key without saving anything.">Test connection</button>
+      <button class="btn ghost" id="pushLocal" data-tip="Upload once|Copies this device into the shared database. Run it from one device only, or codes will clash.">Upload this device to cloud</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">Category rules</h2>
+    <p class="hint" style="margin:0 0 14px">Each category owns a code prefix, so a code tells you what the part is
+      before you read the name. Terminals become TRM-0001, couplers CPL-0001. Changing a prefix only affects
+      codes created from now on — existing codes never move.</p>
+    <div class="tablewrap"><table id="tCats"><thead><tr>
+      <th>Category</th><th>Prefix</th><th>House rule</th><th class="num">Items</th><th>Next code</th><th></th>
+    </tr></thead><tbody></tbody></table></div>
+    <div class="grid mt" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+      <label class="f"><span>Category</span><input id="newCat" placeholder="e.g. Sleeves"></label>
+      <label class="f"><span>Code prefix</span><input id="newPre" class="code" placeholder="SLV" style="text-transform:uppercase"></label>
+      <label class="f"><span>Colour</span><input type="color" id="newCol" value="#0E7490" style="height:44px;padding:4px"></label>
+      <label class="f"><span>Counted in</span><input id="newUnit" list="unitL" placeholder="pcs"></label>
+      <label class="f"><span>Comes in</span><select id="newPack">
+        <option value="">Loose</option><option>roll</option><option>packet</option><option>carton</option>
+        <option>box</option><option>bag</option><option>bundle</option><option>coil</option><option>set</option></select></label>
+      <label class="f"><span>Per pack</span><input id="newPer" type="number" inputmode="decimal" step="any" placeholder="3000"></label>
+      <label class="f"><span>Issued as</span><select id="newWhole">
+        <option value="0">Any quantity</option><option value="1">Whole packs only</option></select></label>
+      <label class="f"><span>Each pack tracked?</span><select id="newSerial">
+        <option value="0">No</option><option value="1">Yes — code per pack</option></select></label>
+      <label class="f"><span>Flag below</span>
+        <div class="row" style="gap:6px;flex-wrap:nowrap">
+          <input id="newMin" type="number" inputmode="decimal" step="any" placeholder="2" style="flex:1;min-width:0">
+          <select id="newBasis" class="txt" style="width:98px;padding:11px 8px"><option value="pack">packs</option><option value="base">units</option></select>
+        </div></label>
+    </div>
+    <div class="row mt">
+      <button class="btn ghost" id="addCat" data-tip="Add a rule|Every new item in this category inherits these settings. You can still override any of them per item.">Add rule</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">This device</h2>
+    <div class="grid">
+      <label class="f"><span>Operator name (shown in log)</span><input id="sUser" placeholder="e.g. Store — Ramesh"></label>
+      <label class="f"><span>Fallback code prefix</span><input id="sPrefix" value="RM"
+        data-tip="Fallback prefix|Used only when an item has no category, or its category has no rule."></label>
+      <label class="f"><span>Currency symbol</span><input id="sCur" value="₹"></label>
+      <label class="f"><span>Expiry warning (days)</span><input id="sExp" type="number" min="1" value="30"></label>
+      <label class="f"><span>Beep on scan</span><select id="sBeep"><option value="1">On</option><option value="0">Off</option></select></label>
+      <label class="f"><span>Scan screen</span><select id="sSimple">
+        <option value="0">Full — I set the mode first</option>
+        <option value="1">Simple — ask me after each scan</option></select></label>
+    </div>
+    <div class="row mt"><button class="btn ghost" id="saveSet">Save settings</button></div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">Backup</h2>
+    <p class="hint" style="margin:0 0 10px">Take a backup before any big change, whichever backend you use.</p>
+    <div class="row">
+      <button class="btn" id="bkDown" data-tip="Download a backup|A single file holding every item, batch and movement. Take one before any big change.">Download backup</button>
+      <button class="btn ghost" id="bkUp" data-tip="Restore|Replaces everything on this device with a backup file.">Restore backup</button>
+      <input type="file" id="bkFile" accept="application/json" hidden>
+      <button class="btn red" id="bkWipe" data-tip="Erase everything|Cannot be undone. Download a backup first.">Erase this device</button>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<nav id="botNav" role="tablist"><div class="items"></div></nav>
+<div id="sheetBg"></div>
+<div id="sheet"><div class="grab"></div><div class="list"></div></div>
+
+<div id="printArea"><div class="labelgrid" id="printGrid"></div></div>
+<div id="tip" role="tooltip" aria-hidden="true"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://fastly.jsdelivr.net/npm/barcode-detector@3/dist/iife/polyfill.min.js"></script>
+<script>
+/* ============================================================
+   BARCODE WRITERS — both verified during development by
+   rendering the output and decoding it back with ZXing.
+   Code 128-B: 40/40 strings.   QR (level Q): 305/305 strings.
+   No external library is used to draw a label.
+   ============================================================ */
+
+/* ---------- Code 128-B ---------- */
+const C128=['11011001100','11001101100','11001100110','10010011000','10010001100','10001001100','10011001000','10011000100','10001100100','11001001000','11001000100','11000100100','10110011100','10011011100','10011001110','10111001100','10011101100','10011100110','11001110010','11001011100','11001001110','11011100100','11001110100','11101101110','11101001100','11100101100','11100100110','11101100100','11100110100','11100110010','11011011000','11011000110','11000110110','10100011000','10001011000','10001000110','10110001000','10001101000','10001100010','11010001000','11000101000','11000100010','10110111000','10110001110','10001101110','10111011000','10111000110','10001110110','11101110110','11010001110','11000101110','11011101000','11011100010','11011101110','11101011000','11101000110','11100010110','11101101000','11101100010','11100011010','11101111010','11001000010','11110001010','10100110000','10100001100','10010110000','10010000110','10000101100','10000100110','10110010000','10110000100','10011010000','10011000010','10000110100','10000110010','11000010010','11001010000','11110111010','11000010100','10001111010','10100111100','10010111100','10010011110','10111100100','10011110100','10011110010','11110100100','11110010100','11110010010','11011011110','11011110110','11110110110','10101111000','10100011110','10001011110','10111101000','10111100010','11110101000','11110100010','10111011110','10111101110','11101011110','11110101110','11010000100','11010010000','11010011100'];
+function c128bits(t){let b=C128[104],s=104;
+  for(let i=0;i<t.length;i++){const v=t.charCodeAt(i)-32;if(v<0||v>94)return null;b+=C128[v];s+=v*(i+1);}
+  return b+C128[s%103]+'1100011101011';}
+function barSVG(t,h){const b=c128bits(t);if(!b)return '<svg viewBox="0 0 10 10"></svg>';h=h||36;
+  const n=b.length,q=10,W=n+q*2;let d='',r=0;
+  for(let i=0;i<=n;i++){if(b[i]==='1')r++;else if(r){d+=`M${q+i-r} 0h${r}v${h}h-${r}z`;r=0;}}
+  return `<svg viewBox="0 0 ${W} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><rect width="${W}" height="${h}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;}
+
+/* ---------- QR (byte mode, error level Q) ---------- */
+const QECB=[[[1,26,13]],[[1,44,22]],[[2,35,17]],[[2,50,24]],[[2,33,15],[2,34,16]],[[4,43,19]],[[2,32,14],[4,33,15]],[[4,40,18],[2,41,19]]];
+const QAL=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42]];
+const QFMT=[21522,20773,24188,23371,17913,16590,20375,19104,30660,29427,32170,30877,26159,25368,27713,26998,5769,5054,7399,6608,1890,597,3340,2107,13663,12392,16177,14854,9396,8579,11994,11245];
+const QVER=[31892,34236], QREM=[0,7,7,7,7,7,0,0];
+const GE=new Uint8Array(512),GL=new Uint8Array(256);
+(function(){let x=1;for(let i=0;i<255;i++){GE[i]=x;GL[x]=i;x<<=1;if(x&256)x^=0x11D;}for(let i=255;i<512;i++)GE[i]=GE[i-255];})();
+const gm=(a,b)=>(a===0||b===0)?0:GE[GL[a]+GL[b]];
+function rsPoly(n){let p=[1];for(let i=0;i<n;i++){const q=[...p,0];for(let j=0;j<p.length;j++)q[j+1]^=gm(p[j],GE[i]);p=q;}return p;}
+function rsEnc(d,n){const g=rsPoly(n),r=new Array(n).fill(0);
+  for(const x of d){const f=x^r[0];r.shift();r.push(0);if(f)for(let i=0;i<n;i++)r[i]^=gm(g[i+1],f);}return r;}
+function qrMatrix(text){
+  const by=Array.from(new TextEncoder().encode(text));let ver=-1;
+  for(let v=1;v<=8;v++){const dc=QECB[v-1].reduce((s,[b,,d])=>s+b*d,0);if(12+8*by.length<=8*dc){ver=v;break;}}
+  if(ver<0)return null;
+  const ecb=QECB[ver-1],dcw=ecb.reduce((s,[b,,d])=>s+b*d,0),bits=[];
+  const push=(v,l)=>{for(let i=l-1;i>=0;i--)bits.push((v>>i)&1);};
+  push(4,4);push(by.length,8);by.forEach(b=>push(b,8));
+  for(let i=0;i<4&&bits.length<8*dcw;i++)bits.push(0);
+  while(bits.length%8)bits.push(0);
+  const cw=[];for(let i=0;i<bits.length;i+=8){let b=0;for(let j=0;j<8;j++)b=(b<<1)|bits[i+j];cw.push(b);}
+  const pd=[0xEC,0x11];let pi=0;while(cw.length<dcw)cw.push(pd[pi++%2]);
+  const dB=[],eB=[];let off=0;
+  for(const[nb,tot,dat]of ecb)for(let i=0;i<nb;i++){const d=cw.slice(off,off+dat);off+=dat;dB.push(d);eB.push(rsEnc(d,tot-dat));}
+  const out=[],mD=Math.max(...dB.map(b=>b.length)),mE=Math.max(...eB.map(b=>b.length));
+  for(let i=0;i<mD;i++)dB.forEach(b=>{if(i<b.length)out.push(b[i]);});
+  for(let i=0;i<mE;i++)eB.forEach(b=>{if(i<b.length)out.push(b[i]);});
+  const st=[];out.forEach(b=>{for(let i=7;i>=0;i--)st.push((b>>i)&1);});
+  for(let i=0;i<QREM[ver-1];i++)st.push(0);
+  const N=17+4*ver,m=Array.from({length:N},()=>new Array(N).fill(null)),fn=Array.from({length:N},()=>new Array(N).fill(false));
+  const set=(r,c,v)=>{if(r>=0&&r<N&&c>=0&&c<N){m[r][c]=v;fn[r][c]=true;}};
+  const fdr=(R,C)=>{for(let r=-1;r<=7;r++)for(let c=-1;c<=7;c++){const ib=r>=0&&r<7&&c>=0&&c<7;
+    set(R+r,C+c,(ib&&(r===0||r===6||c===0||c===6||(r>=2&&r<=4&&c>=2&&c<=4)))?1:0);}};
+  fdr(0,0);fdr(0,N-7);fdr(N-7,0);
+  for(const r of QAL[ver-1])for(const c of QAL[ver-1]){
+    if((r===6&&c===6)||(r===6&&c===N-7)||(r===N-7&&c===6))continue;
+    for(let a=-2;a<=2;a++)for(let b=-2;b<=2;b++)set(r+a,c+b,(Math.abs(a)===2||Math.abs(b)===2||(a===0&&b===0))?1:0);}
+  for(let i=8;i<N-8;i++){set(6,i,i%2===0?1:0);set(i,6,i%2===0?1:0);}
+  set(N-8,8,1);
+  for(let i=0;i<9;i++){if(!fn[8][i])set(8,i,0);if(!fn[i][8])set(i,8,0);}
+  for(let i=0;i<8;i++){set(8,N-1-i,0);set(N-1-i,8,0);}
+  if(ver>=7){const vi=QVER[ver-7];for(let i=0;i<18;i++){const b=(vi>>i)&1;
+    set(Math.floor(i/3),N-11+(i%3),b);set(N-11+(i%3),Math.floor(i/3),b);}}
+  let idx=0,up=true;
+  for(let col=N-1;col>0;col-=2){if(col===6)col--;
+    for(let k=0;k<N;k++){const row=up?N-1-k:k;
+      for(let c=0;c<2;c++){const cc=col-c;if(fn[row][cc])continue;m[row][cc]=idx<st.length?st[idx++]:0;}}
+    up=!up;}
+  const MK=[(r,c)=>(r+c)%2===0,(r,c)=>r%2===0,(r,c)=>c%3===0,(r,c)=>(r+c)%3===0,
+    (r,c)=>(Math.floor(r/2)+Math.floor(c/3))%2===0,(r,c)=>((r*c)%2)+((r*c)%3)===0,
+    (r,c)=>(((r*c)%2)+((r*c)%3))%2===0,(r,c)=>(((r+c)%2)+((r*c)%3))%2===0];
+  const P1=[1,0,1,1,1,0,1,0,0,0,0],P2=[0,0,0,0,1,0,1,1,1,0,1];
+  const hit=(a,i,p)=>p.every((v,j)=>a[i+j]===v);
+  function pen(g){let p=0;
+    for(let r=0;r<N;r++){let n=1;for(let c=1;c<N;c++){if(g[r][c]===g[r][c-1])n++;else{if(n>=5)p+=3+(n-5);n=1;}}if(n>=5)p+=3+(n-5);}
+    for(let c=0;c<N;c++){let n=1;for(let r=1;r<N;r++){if(g[r][c]===g[r-1][c])n++;else{if(n>=5)p+=3+(n-5);n=1;}}if(n>=5)p+=3+(n-5);}
+    for(let r=0;r<N-1;r++)for(let c=0;c<N-1;c++)if(g[r][c]===g[r][c+1]&&g[r][c]===g[r+1][c]&&g[r][c]===g[r+1][c+1])p+=3;
+    for(let r=0;r<N;r++)for(let c=0;c+11<=N;c++)if(hit(g[r],c,P1)||hit(g[r],c,P2))p+=40;
+    for(let c=0;c<N;c++){const col=g.map(r=>r[c]);for(let r=0;r+11<=N;r++)if(hit(col,r,P1)||hit(col,r,P2))p+=40;}
+    let dk=0;g.forEach(r=>r.forEach(v=>dk+=v));
+    return p+Math.floor(Math.abs(dk*100/(N*N)-50)/5)*10;}
+  let best=null,bp=Infinity;
+  for(let k=0;k<8;k++){
+    const g=m.map(r=>r.slice());
+    for(let r=0;r<N;r++)for(let c=0;c<N;c++)if(!fn[r][c]&&MK[k](r,c))g[r][c]^=1;
+    const f=QFMT[24+k];
+    for(let i=0;i<15;i++){const b=(f>>i)&1;
+      if(i<6)g[i][8]=b;else if(i===6)g[7][8]=b;else if(i===7)g[8][8]=b;else if(i===8)g[8][7]=b;else g[8][14-i]=b;
+      if(i<8)g[8][N-1-i]=b;else g[N-15+i][8]=b;}
+    const p=pen(g);if(p<bp){bp=p;best=g;}}
+  return best;}
+function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></svg>';
+  const N=g.length,q=4,W=N+q*2;let d='';
+  for(let r=0;r<N;r++){let c=0;while(c<N){if(g[r][c]){let w=1;while(c+w<N&&g[r][c+w])w++;d+=`M${q+c} ${q+r}h${w}v1h-${w}z`;c+=w;}else c++;}}
+  return `<svg viewBox="0 0 ${W} ${W}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg"><rect width="${W}" height="${W}" fill="#fff"/><path d="${d}" fill="#000"/></svg>`;}
+
+/* ============================================================
+   STATE + STORAGE
+   Stock on hand is never stored. It is always the sum of the
+   movement log, so the numbers can always be explained.
+   ============================================================ */
+const LK='storectl:v2';
+let DB={items:[],batches:[],moves:[],seq:1,
+        settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
+            cats:[
+              {name:'Terminals',prefix:'TRM',unit:'pcs', pack:'roll',   packQty:3000,minPacks:2,whole:true, col:'#9A4409'},
+              {name:'Couplers', prefix:'CPL',unit:'pcs', pack:'packet', packQty:100, minBase:500,serial:true, col:'#0E7490'},
+              {name:'Sleeves',  prefix:'SLV',unit:'m',   pack:'roll',   packQty:100, minPacks:2, col:'#6D28D9'},
+              {name:'Pipes',    prefix:'PIP',unit:'m',   pack:'roll',   packQty:100, minPacks:2, col:'#12652F'},
+              {name:'Tapes',    prefix:'TAP',unit:'roll',pack:'carton', packQty:24,  minPacks:2, col:'#BE123C'}
+            ]}};
+let mode='IN', editing=null, lastMove=null, saveT=null;
+
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const numv=n=>{const x=parseFloat(n);return isFinite(x)?x:0;};
+const fmt=n=>(Math.round(n*1000)/1000).toLocaleString('en-IN');
+const money=n=>DB.settings.cur+fmt(Math.round(n*100)/100);
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
+const nowISO=()=>new Date().toISOString();
+const today=()=>new Date().toISOString().slice(0,10);
+function toast(m,bad){const t=$('#toast');t.textContent=m;t.className='on'+(bad?' bad':'');
+  clearTimeout(t._h);t._h=setTimeout(()=>t.className='',2500);}
+
+let localMode='memory';
+const Local={
+  async init(){ if(window.storage&&window.storage.get) localMode='cloudartifact';
+    else{try{localStorage.setItem('_t','1');localStorage.removeItem('_t');localMode='local';}catch(e){localMode='memory';}}},
+  async load(){try{
+      if(localMode==='cloudartifact'){const r=await window.storage.get(LK);return r?JSON.parse(r.value):null;}
+      if(localMode==='local'){const s=localStorage.getItem(LK);return s?JSON.parse(s):null;}
+    }catch(e){}return null;},
+  async save(d){const s=JSON.stringify(d);try{
+      if(localMode==='cloudartifact'){await window.storage.set(LK,s);return true;}
+      if(localMode==='local'){localStorage.setItem(LK,s);return true;}
+    }catch(e){toast('Could not save locally — download a backup',true);}return false;}
+};
+function persistLocal(){clearTimeout(saveT);saveT=setTimeout(()=>Local.save(DB),150);}
+
+/* ---------- Supabase (plain REST, no library) ---------- */
+function sbBase(u){
+  // tolerate what people actually paste: trailing slashes, /rest, /rest/v1,
+  // a copied endpoint path, or a missing scheme.
+  let x=String(u||'').trim();
+  if(!x) return '';
+  if(!/^https?:\/\//i.test(x)) x='https://'+x;
+  x=x.replace(/\/+$/,'');
+  x=x.replace(/\/rest(\/v1)?(\/.*)?$/i,'');
+  return x.replace(/\/+$/,'');
+}
+const SB={
+  ok:false,
+  get on(){return DB.settings.backend==='cloud'&&DB.settings.sbUrl&&DB.settings.sbKey;},
+  h(extra){return Object.assign({'apikey':DB.settings.sbKey,'Authorization':'Bearer '+DB.settings.sbKey,
+    'Content-Type':'application/json'},extra||{});},
+  async get(path){const r=await fetch(sbBase(DB.settings.sbUrl)+'/rest/v1/'+path,{headers:this.h()});
+    if(!r.ok)throw new Error(await r.text());return r.json();},
+  async post(table,rows){const r=await fetch(sbBase(DB.settings.sbUrl)+'/rest/v1/'+table,
+    {method:'POST',headers:this.h({'Prefer':'return=representation'}),body:JSON.stringify(rows)});
+    if(!r.ok)throw new Error(await r.text());return r.json();},
+  async patch(table,q,row){const r=await fetch(sbBase(DB.settings.sbUrl)+'/rest/v1/'+table+'?'+q,
+    {method:'PATCH',headers:this.h(),body:JSON.stringify(row)});
+    if(!r.ok)throw new Error(await r.text());return true;},
+  async pull(){
+    const [items,batches,moves]=await Promise.all([
+      this.get('items?select=*&order=name'),
+      this.get('batches?select=*&order=received_on.desc'),
+      this.get('movements?select=*&order=created_at.desc&limit=5000')]);
+    DB.items=items.map(r=>({code:r.code,name:r.name,cat:r.category||'',unit:r.unit||'pcs',
+      min:+r.min_qty||0,rate:+r.rate||0,sup:r.supplier||'',loc:r.location||'',note:r.notes||''}));
+    DB.batches=batches.map(r=>({bcode:r.batch_code,code:r.item_code,ven:r.vendor||'',lot:r.lot_no||'',
+      recv:r.received_on||'',exp:r.expiry||'',rate:+r.rate||0}));
+    DB.moves=moves.map(r=>({id:r.id,ts:r.created_at,bcode:r.batch_code||'',code:r.item_code,
+      type:r.kind,qty:+r.qty,note:r.note||'',user:r.operator||''}));
+    this.ok=true;}
+};
+
+/* ---------- writes go through here ---------- */
+async function pushMove(mv){
+  DB.moves.unshift(mv); persistLocal();
+  if(SB.on){ try{ await SB.post('movements',[{id:mv.id,item_code:mv.code,batch_code:mv.bcode||null,
+      kind:mv.type,qty:mv.qty,note:mv.note||null,operator:mv.user||null,created_at:mv.ts}]);}
+    catch(e){ toast('Saved here, but not to the cloud — check Setup',true); } }
+}
+async function pushItem(it,isNew){
+  persistLocal();
+  if(SB.on){ const row={code:it.code,name:it.name,category:it.cat,unit:it.unit,min_qty:it.min,
+      rate:it.rate,supplier:it.sup,location:it.loc,notes:it.note};
+    try{ if(isNew) await SB.post('items',[row]); else await SB.patch('items','code=eq.'+encodeURIComponent(it.code),row);}
+    catch(e){ toast('Item not synced to cloud — check Setup',true);} }
+}
+async function pushBatch(b){
+  persistLocal();
+  if(SB.on){ try{ await SB.post('batches',[{batch_code:b.bcode,item_code:b.code,vendor:b.ven||null,
+      lot_no:b.lot||null,received_on:b.recv||null,expiry:b.exp||null,rate:b.rate||0}]);}
+    catch(e){ toast('Batch not synced to cloud',true);} }
+}
+
+/* ---------- derived stock ---------- */
+function stockMaps(){
+  const byItem={}, byBatch={};
+  DB.items.forEach(i=>byItem[i.code]=0);
+  DB.batches.forEach(b=>byBatch[b.bcode]=0);
+  for(const m of DB.moves){
+    const s = m.type==='OUT' ? -m.qty : m.qty;   // ADJ rows are stored signed
+    if(byItem[m.code]===undefined) byItem[m.code]=0;
+    byItem[m.code]+=s;
+    if(m.bcode){ if(byBatch[m.bcode]===undefined) byBatch[m.bcode]=0; byBatch[m.bcode]+=s; }
+  }
+  return {byItem,byBatch};
+}
+const item=c=>DB.items.find(i=>i.code.toUpperCase()===String(c).trim().toUpperCase())||null;
+const batch=c=>DB.batches.find(b=>b.bcode.toUpperCase()===String(c).trim().toUpperCase())||null;
+function resolve(code){
+  const c=String(code).trim();
+  const b=batch(c); if(b) return {kind:'batch',batch:b,item:item(b.code)};
+  const i=item(c);  if(i) return {kind:'item',batch:null,item:i};
+  return null;
+}
+/* ---------- packs ----------
+   One base unit is the truth (pcs, m, roll). A pack is how it arrives
+   and how it is labelled. Stock is stored only in base units; pack
+   counts are always derived, so the two can never disagree. */
+const PACKS=['roll','packet','carton','box','bag','bundle','coil','set'];
+const packSize=it=>Math.max(0,+((it&&it.packQty)||0));
+/* whole-pack items never move as loose units — a roll of 2.8 BL goes
+   out as a roll, so the pack is the real stocking unit and the
+   pieces-per-pack figure is a spec, not a live conversion. */
+const isWhole=it=>!!(it&&it.whole&&it.pack&&packSize(it)>0);
+/* serialised items: every physical pack carries its own code, so the
+   system knows how much is left inside each one, not just in total. */
+const isSerial=it=>!!(it&&it.serial&&it.pack&&packSize(it)>0);
+const hasPack=it=>!!(it&&it.pack&&packSize(it)>0);
+const plural=(w,n)=>{ if(Math.abs(n)===1)return w;
+  return w==='box'?'boxes':(w==='bag'||w==='roll'||w==='packet'||w==='carton'||
+    w==='bundle'||w==='coil'||w==='set'||w==='sheet'||w==='pack')?w+'s':w; };
+const packName=(it,n)=>plural((it&&it.pack)||'pack',n);
+const unitName=(it,n)=>plural((it&&it.unit)||'pcs',n);
+const toBase=(it,packs)=>hasPack(it)?packs*packSize(it):packs;
+const toPacks=(it,base)=>hasPack(it)?base/packSize(it):base;
+/* "9,000 pcs · 3 rolls" */
+function qtyText(it,base){
+  const b=fmt(base)+' '+unitName(it,base);
+  if(!hasPack(it))return b;
+  const p=toPacks(it,base);
+  const ptxt=fmt(Math.round(p*100)/100)+' '+packName(it,p);
+  return isWhole(it) ? ptxt+' · '+b : b+' · '+ptxt;
+}
+function packText(it){
+  if(!hasPack(it))return '';
+  return '1 '+it.pack+' = '+fmt(packSize(it))+' '+unitName(it,packSize(it))
+    +(isWhole(it)?' · whole '+packName(it,2)+' only':'')
+    +(isSerial(it)?' · tracked individually':'');
+}
+
+function cats(){ return DB.settings.cats||[]; }
+function catRule(name){
+  const n=String(name||'').trim().toLowerCase();
+  return cats().find(c=>c.name.trim().toLowerCase()===n)||null;
+}
+function prefixFor(catName){
+  const r=catRule(catName);
+  const p=(r&&r.prefix)||DB.settings.prefix||'RM';
+  return p.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6)||'RM';
+}
+/* The next number is read back from the codes that exist, not from a
+   stored counter. A counter drifts after a restore or a cloud merge;
+   the codes themselves cannot. */
+function nextItemCode(catName){
+  const p=prefixFor(catName);
+  const re=new RegExp('^'+p+'-(\\d+)$','i');
+  let max=0;
+  DB.items.forEach(i=>{const m=re.exec(i.code); if(m) max=Math.max(max,parseInt(m[1],10));});
+  let n=max+1,c;
+  do{ c=p+'-'+String(n).padStart(4,'0'); n++; }while(item(c));
+  return c;
+}
+/* Short on purpose: ITEM-A1 stays inside QR version 1 (21 modules),
+   which is what keeps a 25x15 mm label readable on a 203 dpi printer.
+   The delivery date lives in the record and prints as text. */
+/* Category colour is a wayfinding cue on screen only — thermal labels
+   print black on white, so nothing depends on it. */
+const CAT_COLS=['#0E7490','#9A4409','#6D28D9','#12652F','#BE123C','#1D4ED8','#8A5206','#0F766E'];
+function catCol(name){
+  const r=catRule(name);
+  if(r&&r.col)return r.col;
+  if(!name)return '#8894A6';
+  let h=0; for(const ch of String(name).toLowerCase()) h=(h*31+ch.charCodeAt(0))>>>0;
+  return CAT_COLS[h%CAT_COLS.length];
+}
+const catDot=n=>`<span class="cdot" style="background:${esc(catCol(n))}"></span>`;
+const catChip=n=>n?`<span class="cchip" style="--cc:${esc(catCol(n))}">${esc(n)}</span>`:'<span style="opacity:.5">—</span>';
+
+const B36='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+function nextBatchCode(icode){
+  const pre=icode+'-';
+  let max=-1;
+  DB.batches.forEach(b=>{
+    if(b.bcode.indexOf(pre)!==0)return;
+    const tail=b.bcode.slice(pre.length);
+    if(!/^[0-9A-Z]{1,3}$/.test(tail))return;
+    let v=0; for(const ch of tail){const d=B36.indexOf(ch); if(d<0)return; v=v*36+d;}
+    if(v>max)max=v;
+  });
+  let n=max+1,c;
+  do{
+    let t='',v=n; do{t=B36[v%36]+t;v=Math.floor(v/36);}while(v>0);
+    while(t.length<2)t='0'+t;
+    c=pre+t; n++;
+  }while(batch(c));
+  return c;}
+
+/* ============================================================
+   SCANNING
+   ============================================================ */
+let AC=null;
+function beep(ok){ if(!+DB.settings.beep) return;
+  try{ AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+    const o=AC.createOscillator(),g=AC.createGain();
+    o.frequency.value=ok?1180:320; o.connect(g); g.connect(AC.destination);
+    g.gain.setValueAtTime(.001,AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(.25,AC.currentTime+.01);
+    g.gain.exponentialRampToValueAtTime(.001,AC.currentTime+(ok?.12:.3));
+    o.start(); o.stop(AC.currentTime+(ok?.13:.31));
+  }catch(e){}}
+function buzz(ok){ if(navigator.vibrate) navigator.vibrate(ok?35:[70,60,70]); }
+
+$$('.modes button').forEach(b=>b.onclick=()=>{
+  mode=b.dataset.mode;
+  $$('.modes button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
+  $('#scanQty').disabled=(mode==='LOOK');
+  $('#scanQty').placeholder = mode==='COUNT'?'counted':'qty';
+  if(!isTouch()) $('#scanInput').focus();
+});
+const isTouch=()=>matchMedia('(pointer:coarse)').matches;
+
+let qtyMode='pack';
+$('#qtyMode').onclick=()=>{
+  qtyMode = qtyMode==='pack' ? 'base' : 'pack';
+  const b=$('#qtyMode'); b.dataset.mode=qtyMode;
+  b.textContent = qtyMode==='pack' ? 'Packs' : 'Pieces';
+  if(!isTouch()) $('#scanInput').focus();
+};
+$('#scanInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){e.preventDefault();const v=$('#scanInput').value;$('#scanInput').value='';handleCode(v);}
+});
+document.addEventListener('keydown',e=>{
+  const t=e.target;
+  if(!t||t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||t.isContentEditable)return;
+  if(e.ctrlKey||e.metaKey||e.altKey)return;
+  if(e.key.length===1)$('#scanInput').focus();
+});
+
+function show(cls,html){const r=$('#result');r.className='result '+cls;r.innerHTML=html;}
+
+async function handleCode(raw){
+  const code=String(raw||'').trim();
+  if(!code)return;
+  const res=resolve(code);
+  const {byItem,byBatch}=stockMaps();
+
+  if(!res){
+    beep(false);buzz(false);
+    show('bad',`<span class="tag err">Not recognised</span>
+      <div class="rnm" style="margin-top:6px">Unknown code</div>
+      <div class="rcd">${esc(code)}</div>
+      <div class="row mt"><button class="btn blue sm" id="qa">Create an item with this code</button></div>`);
+    $('#qa').onclick=()=>{go('items');resetItemForm();$('#fCode').value=code;$('#fName').focus();};
+    return;
+  }
+
+  const it=res.item, b=res.batch;
+  if(!it){ beep(false); show('bad','<span class="tag err">Broken link</span><div class="rcd">Batch '+esc(code)+' has no parent item.</div>'); return; }
+  const onHand=byItem[it.code]||0, bHand=b?(byBatch[b.bcode]||0):null;
+
+  if(+DB.settings.simple){ beep(true); buzz(true); askDirection(code,it,b,onHand,bHand); return; }
+
+  if(mode==='LOOK'){
+    beep(true);
+    const kids=DB.batches.filter(x=>x.code===it.code&&(byBatch[x.bcode]||0)>0);
+    show('info',`<span class="tag look">Look up</span>
+      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+      <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}</div>
+      <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))}</span>
+        ${b?`<span class="un">· this batch ${fmt(bHand)}</span>`:''}</div>
+      <div class="rcd" style="margin-top:6px">${packText(it)?esc(packText(it))+' · ':''}reorder below ${esc(qtyText(it,it.min))} · ${money(onHand*it.rate)}</div>
+      ${isSerial(it)&&kids.length?`<div class="rcd" style="margin-top:8px">Open ${esc(packName(it,2))}: `
+        +kids.slice(0,10).map(x=>esc(x.bcode)+' ('+fmt(byBatch[x.bcode]||0)+')').join(' · ')
+        +(kids.length>10?' …':'')+`</div>`:''}`);
+    return;
+  }
+
+  /* A tracked pack always asks, because the answer depends on what is
+     left inside this particular pack — not on a mode set minutes ago. */
+  if(b && isSerial(it) && (mode==='IN'||mode==='OUT')){
+    beep(true); buzz(true); askPack(code,it,b,onHand,bHand,mode); return;
+  }
+
+  const entered=Math.abs(numv($('#scanQty').value));
+  const usePacks = hasPack(it) && (isWhole(it) || qtyMode==='pack');
+  if(isWhole(it) && entered%1!==0){
+    beep(false);
+    show('bad',`<span class="tag err">Whole ${esc(packName(it,2))} only</span>
+      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+      <div class="rcd">${esc(code)}</div>
+      <div class="rcd" style="margin-top:8px">${esc(it.name)} moves as complete ${esc(packName(it,2))}.
+        Enter a whole number, not ${esc(fmt(entered))}.</div>`);
+    $('#scanQty').select(); return;
+  }
+  const qty = usePacks ? toBase(it,entered) : entered;
+  const enteredText = usePacks
+    ? fmt(entered)+' '+packName(it,entered)+' ('+fmt(qty)+' '+unitName(it,qty)+')'
+    : fmt(qty)+' '+unitName(it,qty);
+
+  if(mode==='COUNT'){
+    if($('#scanQty').value===''){beep(false);toast('Type the counted quantity first',true);return;}
+    const target=b?bHand:onHand, diff=qty-target;
+    if(diff===0){beep(true);show('ok',`<span class="tag adj">Count matches</span>
+      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
+      <div class="math"><span class="now">${fmt(qty)}</span><span class="un">${esc(qtyText(it,qty))} — no correction needed</span></div>`);return;}
+    const mv={id:uid(),ts:nowISO(),bcode:b?b.bcode:'',code:it.code,type:'ADJ',qty:diff,
+      note:'Stocktake: system '+fmt(target)+' → counted '+fmt(qty)+' '+it.unit,user:DB.settings.user||'—'};
+    await pushMove(mv); lastMove=mv; beep(true);buzz(true);
+    show('ok',`<span class="tag adj">Stock corrected</span>
+      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
+      <div class="math"><span class="was">${fmt(target)}</span><span class="now">${fmt(qty)}</span>
+        <span class="un">${esc(it.unit)} (${diff>0?'+':''}${fmt(diff)})</span></div>
+      ${undoBtn()}`);
+    wireUndo(); render(); return;
+  }
+
+  if(!qty){beep(false);toast('Set a quantity first',true);$('#scanQty').select();return;}
+
+  if(mode==='OUT'){
+    const avail=b?bHand:onHand;
+    if(qty>avail){beep(false);buzz(false);
+      show('bad',`<span class="tag err">Not enough stock</span>
+        <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
+        <div class="math"><span class="now">${fmt(avail)}</span><span class="un">${esc(qtyText(it,avail))} available · tried ${esc(enteredText)}</span></div>`);
+      return;}
+  }
+
+  const mv={id:uid(),ts:nowISO(),bcode:b?b.bcode:'',code:it.code,type:mode,qty:qty,
+    note:'',user:DB.settings.user||'—'};
+  await pushMove(mv); lastMove=mv;
+  const after=(mode==='IN'?onHand+qty:onHand-qty);
+  const low=it.min>0&&after<=it.min;
+  beep(true);buzz(true);
+  show('ok',`<span class="tag ${mode==='IN'?'in':'out'}">${mode==='IN'?'Received':'Issued'} ${esc(enteredText)}</span>
+    <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+    <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}${b&&b.ven?' · '+esc(b.ven):''}</div>
+    <div class="math"><span class="was">${fmt(onHand)}</span>
+      <span class="now">${fmt(after)}</span>
+      <span class="un">${esc(qtyText(it,after))} left</span>${low?'<span class="pill">Reorder now</span>':''}</div>
+    ${undoBtn()}`);
+  wireUndo(); render();
+}
+
+/* ---------- a tracked pack ---------- */
+let PACKASK=null;
+function askPack(code,it,b,onHand,left,dir){
+  const full=b.qty0||packSize(it);
+  PACKASK={code,it,b,onHand,left,dir,full};
+  if(left<=0&&dir==='OUT'){
+    show('bad',`<span class="tag err">This ${esc(it.pack)} is empty</span>
+      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+      <div class="rcd">${esc(code)}</div>
+      <div class="rcd" style="margin-top:8px">Nothing left inside. Take the sticker off and scan another ${esc(it.pack)}.</div>`);
+    return;
+  }
+  const pct=full>0?Math.max(0,Math.min(100,Math.round(left/full*100))):0;
+  show('info',`<span class="tag look">${esc(dir==='IN'?'Put back into':'Take from')} this ${esc(it.pack)}</span>
+    <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+    <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}${b.ven?' · '+esc(b.ven):''}</div>
+    <div class="math"><span class="now">${fmt(left)}</span>
+      <span class="un">${esc(unitName(it,left))} left of ${fmt(full)}</span></div>
+    <div class="bar2"><i style="width:${pct}%"></i></div>
+    <div class="rcd" style="margin-top:4px">${esc(qtyText(it,onHand))} across all ${esc(packName(it,2))}</div>
+    <div class="bigrow">
+      <button class="big ${dir==='IN'?'in':'out'}" id="pkAll">${dir==='IN'?'Fill to full':'Take all '+fmt(left)}<small>${esc(unitName(it,left))}</small></button>
+      <button class="big grey" id="pkPart">Enter a number<small>part of the ${esc(it.pack)}</small></button>
+    </div>
+    <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="pkCancel">Cancel</button>`);
+  $('#pkAll').onclick=()=>commitPack(dir==='IN'?(full-left):left);
+  $('#pkPart').onclick=()=>askPackQty();
+  $('#pkCancel').onclick=()=>{PACKASK=null;show('','<p class="idle">Ready. Scan the next label.</p>');};
+}
+function askPackQty(){
+  if(!PACKASK)return;
+  const {it,b,left,dir,full}=PACKASK;
+  const cap = dir==='OUT' ? left : (full-left);
+  let buf='';
+  const draw=()=>{
+    const v=buf===''?'0':buf, n=parseFloat(v)||0;
+    const over=n>cap;
+    show(over?'bad':(dir==='IN'?'ok':'info'),
+      `<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Put back':'Take out'}</span>
+       <div class="rnm" style="margin-top:5px">${esc(it.name)}</div>
+       <div class="rcd">${esc(PACKASK.code)} · ${fmt(left)} ${esc(unitName(it,left))} inside</div>
+       <div class="qtybox">${esc(v)} <span style="font-size:15px;opacity:.6">${esc(unitName(it,n))}</span></div>
+       <div class="rcd" style="text-align:right;margin-top:6px">${over
+          ? 'Only '+fmt(cap)+' '+unitName(it,cap)+' possible'
+          : 'Leaves '+fmt(dir==='OUT'?left-n:left+n)+' '+unitName(it,1)+' in this '+esc(it.pack)}</div>
+       <div class="pad">
+         ${[1,2,3,4,5,6,7,8,9].map(k=>`<button data-k="${k}">${k}</button>`).join('')}
+         <button data-k=".">.</button><button data-k="0">0</button><button data-k="del">&#9003;</button>
+       </div>
+       <button class="confirm ${dir==='IN'?'in':'out'}" id="pkOk" ${over||n<=0?'disabled':''}>${dir==='IN'?'Put back':'Take'} ${esc(v)} ${esc(unitName(it,n))}</button>
+       <button class="big grey" style="width:100%;margin-top:8px;font-size:13px;padding:11px" id="pkBack">Back</button>`);
+    $$('.pad button').forEach(bt=>bt.onclick=()=>{
+      const k=bt.dataset.k;
+      if(k==='del')buf=buf.slice(0,-1);
+      else if(k==='.'){if(!buf.includes('.'))buf=(buf||'0')+'.';}
+      else buf=(buf==='0'?'':buf)+k;
+      if(buf.length>9)buf=buf.slice(0,9);
+      draw();
+    });
+    const ok=$('#pkOk'); if(ok&&!ok.disabled) ok.onclick=()=>commitPack(parseFloat(buf||'0'));
+    $('#pkBack').onclick=()=>askPack(PACKASK.code,it,b,PACKASK.onHand,left,dir);
+  };
+  draw();
+}
+async function commitPack(qty){
+  if(!PACKASK)return;
+  const {code,it,b,onHand,left,dir,full}=PACKASK;
+  const cap = dir==='OUT' ? left : (full-left);
+  if(!qty||qty<=0){beep(false);toast('Enter a number first',true);return;}
+  if(qty>cap){beep(false);toast('Only '+fmt(cap)+' '+unitName(it,cap)+' possible',true);return;}
+  const mv={id:uid(),ts:nowISO(),bcode:b.bcode,code:it.code,type:dir,qty:qty,
+    note:(dir==='OUT'?'From ':'Into ')+it.pack+' '+b.bcode,user:DB.settings.user||'—'};
+  await pushMove(mv); lastMove=mv; PACKASK=null;
+  const nowLeft = dir==='OUT' ? left-qty : left+qty;
+  const nowTotal= dir==='OUT' ? onHand-qty : onHand+qty;
+  const empty=nowLeft<=0;
+  const low=it.min>0&&nowTotal<=it.min;
+  beep(true); buzz(true);
+  show(empty?'bad':'ok',
+    `<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Put back':'Taken'} ${fmt(qty)} ${esc(unitName(it,qty))}</span>
+     <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+     <div class="rcd">${esc(code)}</div>
+     <div class="math"><span class="was">${fmt(left)}</span><span class="now">${fmt(nowLeft)}</span>
+       <span class="un">${esc(unitName(it,nowLeft))} left in this ${esc(it.pack)}</span></div>
+     ${empty?`<div class="rcd" style="margin-top:8px"><b>This ${esc(it.pack)} is finished.</b> Take the sticker off before you throw it away.</div>`:''}
+     <div class="rcd" style="margin-top:6px">${esc(qtyText(it,nowTotal))} in store${low?' — reorder now':''}</div>
+     ${undoBtn()}`);
+  wireUndo(); render();
+}
+
+/* ---------- simple mode: ask direction, then quantity ---------- */
+let ASK=null;
+function askDirection(code,it,b,onHand,bHand){
+  ASK={code,it,b,onHand};
+  show('info',`<div class="rnm">${esc(it.name)}</div>
+    <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}</div>
+    <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))} in store</span></div>
+    ${packText(it)?`<div class="rcd">${esc(packText(it))}</div>`:''}
+    <div class="bigrow">
+      <button class="big in"  id="askIn">Came in<small>Add to store</small></button>
+      <button class="big out" id="askOut">Went out<small>Take from store</small></button>
+    </div>
+    <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="askCancel">Cancel</button>`);
+  $('#askIn').onclick=()=>askQty('IN');
+  $('#askOut').onclick=()=>askQty('OUT');
+  $('#askCancel').onclick=()=>{ASK=null;show('','<p class="idle">Ready. Scan the next label.</p>');};
+}
+function askQty(dir){
+  if(!ASK)return;
+  const {it,onHand}=ASK; let buf='';
+  let useP=hasPack(it);
+  const lockP=isWhole(it);
+  const draw=()=>{
+    const v=buf===''?'0':buf;
+    const n=parseFloat(v)||0;
+    const base=useP?toBase(it,n):n;
+    const unitWord=useP?packName(it,n):it.unit;
+    show(dir==='IN'?'ok':'bad',
+      `<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Came in':'Went out'}</span>
+       <div class="rnm" style="margin-top:5px">${esc(it.name)}</div>
+       <div class="rcd">Now in store: ${fmt(onHand)} ${esc(it.unit)}</div>
+       ${hasPack(it)&&!lockP?`<div class="unitsw">
+          <button data-u="pack" aria-pressed="${String(useP)}">${esc(packName(it,2))}</button>
+          <button data-u="base" aria-pressed="${String(!useP)}">${esc(it.unit)}</button>
+        </div>`:''}
+       <div class="qtybox">${esc(v)} <span style="font-size:15px;opacity:.6">${esc(unitWord)}</span></div>
+       ${useP&&n>0?`<div class="rcd" style="text-align:right;margin-top:6px">= ${fmt(base)} ${esc(it.unit)}</div>`:''}
+       <div class="pad">
+         ${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-k="${n}">${n}</button>`).join('')}
+         <button data-k=".">.</button><button data-k="0">0</button><button data-k="del">&#9003;</button>
+       </div>
+       <button class="confirm ${dir==='IN'?'in':'out'}" id="ok">${dir==='IN'?'Add':'Take'} ${esc(v)} ${esc(unitWord)}</button>
+       <button class="big grey" style="width:100%;margin-top:8px;font-size:13px;padding:11px" id="back">Back</button>`);
+    $$('.pad button').forEach(bt=>bt.onclick=()=>{
+      const k=bt.dataset.k;
+      if(k==='del') buf=buf.slice(0,-1);
+      else if(k==='.'){ if(!buf.includes('.')) buf=(buf||'0')+'.'; }
+      else buf=(buf==='0'?'':buf)+k;
+      if(buf.length>9)buf=buf.slice(0,9);
+      draw();
+    });
+    $$('.unitsw button').forEach(bt=>bt.onclick=()=>{useP=bt.dataset.u==='pack';draw();});
+    if(lockP){const dot=$$('.pad button').find(x=>x.dataset.k==='.'); if(dot){dot.disabled=true;dot.style.opacity='.3';}}
+    $('#ok').onclick=()=>{const n=parseFloat(buf||'0');commitSimple(dir,useP?toBase(it,n):n,useP?n:null);};
+    $('#back').onclick=()=>askDirection(ASK.code,ASK.it,ASK.b,ASK.onHand);
+  };
+  draw();
+}
+async function commitSimple(dir,qty,packsTyped){
+  if(!ASK)return;
+  const {code,it,b,onHand}=ASK;
+  if(!qty||qty<=0){beep(false);toast('Type a quantity first',true);return;}
+  const said = packsTyped!=null
+    ? fmt(packsTyped)+' '+packName(it,packsTyped)+' ('+fmt(qty)+' '+it.unit+')'
+    : fmt(qty)+' '+it.unit;
+  if(dir==='OUT'&&qty>onHand){
+    beep(false);buzz(false);
+    show('bad',`<span class="tag err">Not enough in store</span>
+      <div class="rnm" style="margin-top:5px">${esc(it.name)}</div>
+      <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))} available · asked for ${esc(said)}</span></div>
+      <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="rt">Try again</button>`);
+    $('#rt').onclick=()=>askQty('OUT'); return;
+  }
+  const mv={id:uid(),ts:nowISO(),bcode:b?b.bcode:'',code:it.code,type:dir,qty:qty,note:'',user:DB.settings.user||'—'};
+  await pushMove(mv); lastMove=mv; ASK=null;
+  const after=dir==='IN'?onHand+qty:onHand-qty;
+  const low=it.min>0&&after<=it.min;
+  beep(true);buzz(true);
+  show('ok',`<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Added':'Taken'} ${esc(said)}</span>
+    <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
+    <div class="math"><span class="was">${fmt(onHand)}</span>
+      <span class="now">${fmt(after)}</span>
+      <span class="un">${esc(qtyText(it,after))} left</span>${low?'<span class="pill">Order more</span>':''}</div>
+    ${undoBtn()}`);
+  wireUndo(); render();
+}
+
+const undoBtn=()=>`<div class="row mt"><button class="btn ghost sm" id="undoBtn">Undo this</button></div>`;
+function wireUndo(){
+  const b=$('#undoBtn'); if(!b)return;
+  b.onclick=async()=>{
+    if(!lastMove){toast('Nothing to undo',true);return;}
+    const m=lastMove;
+    const rev={id:uid(),ts:nowISO(),bcode:m.bcode,code:m.code,
+      type:m.type==='IN'?'OUT':m.type==='OUT'?'IN':'ADJ',
+      qty:m.type==='ADJ'?-m.qty:m.qty, note:'Undo of '+m.id, user:DB.settings.user||'—'};
+    await pushMove(rev); lastMove=null;
+    show('info','<span class="tag adj">Undone</span><div class="rcd" style="margin-top:6px">A reversing entry was added. The original stays in the log.</div>');
+    render(); toast('Reversed');
+  };
+}
+
+/* ---------- camera ---------- */
+let stream=null, detector=null, rafId=null, lastHit={code:'',t:0};
+$('#camBtn').onclick=()=>{ $('#camWrap').classList.contains('on') ? stopCam() : startCam(); };
+$('#camPick').onchange=()=>startCam($('#camPick').value);
+
+async function startCam(deviceId){
+  if(!window.isSecureContext){
+    note('The camera needs an https:// address. Open this page from your Vercel link, not from a file on the disk.');
+    toast('Camera needs HTTPS',true); return;}
+  if(!('BarcodeDetector' in window)){ note('This browser cannot read barcodes and the fallback did not load. Use a USB scanner, or open in Chrome.'); return; }
+  try{
+    stopCam(true);
+    detector=detector||new BarcodeDetector({formats:['qr_code','code_128']});
+    stream=await navigator.mediaDevices.getUserMedia({video:deviceId?{deviceId:{exact:deviceId}}:{facingMode:{ideal:'environment'}}});
+    const v=$('#video'); v.srcObject=stream; await v.play();
+    $('#camWrap').classList.add('on'); $('#camBtn').dataset.on='1'; $('#camBtn').textContent='Stop';
+    note('Hold the label 10–20 cm away, inside the frame.');
+    listCams();
+    const track=stream.getVideoTracks()[0];
+    const caps=track.getCapabilities?track.getCapabilities():{};
+    const tb=$('#torchBtn');
+    if(caps.torch){tb.hidden=false;tb.onclick=async()=>{const on=tb.dataset.on==='1';
+      try{await track.applyConstraints({advertisedTorch:undefined,advanced:[{torch:!on}]});tb.dataset.on=on?'0':'1';}catch(e){}};}
+    else tb.hidden=true;
+    loop();
+  }catch(e){
+    note('Camera blocked: '+(e&&e.message?e.message:'permission denied')+'. Allow camera access for this site in your browser settings.');
+    toast('Camera unavailable',true);
+  }
+}
+function loop(){
+  const v=$('#video');
+  const tick=async()=>{
+    if(!stream) return;
+    if(v.readyState>=2){
+      try{
+        const codes=await detector.detect(v);
+        if(codes&&codes.length){
+          const val=codes[0].rawValue, t=Date.now();
+          if(!(val===lastHit.code&&t-lastHit.t<1400)){ lastHit={code:val,t}; handleCode(val); }
+        }
+      }catch(e){}
+    }
+    rafId=requestAnimationFrame(tick);
+  };
+  rafId=requestAnimationFrame(tick);
+}
+function stopCam(quiet){
+  if(rafId)cancelAnimationFrame(rafId); rafId=null;
+  if(stream){stream.getTracks().forEach(t=>t.stop());stream=null;}
+  $('#camWrap').classList.remove('on');
+  $('#camBtn').dataset.on='0'; $('#camBtn').textContent='Camera';
+  if(!quiet) note('');
+}
+function note(msg){const n=$('#camNote'); n.hidden=!msg; n.textContent=msg||'';}
+async function listCams(){
+  try{ const ds=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==='videoinput');
+    const cur=stream&&stream.getVideoTracks()[0].getSettings().deviceId;
+    $('#camPick').innerHTML=ds.map((d,i)=>`<option value="${d.deviceId}" ${d.deviceId===cur?'selected':''}>${esc(d.label||'Camera '+(i+1))}</option>`).join('');
+  }catch(e){}
+}
+document.addEventListener('visibilitychange',()=>{ if(document.hidden) stopCam(true); });
+
+/* ============================================================
+   TABS + FORMS
+   ============================================================ */
+const ICON={
+  scan:'<path d="M3 8V4h4M17 4h4v4M21 16v4h-4M7 20H3v-4"/><path d="M3 12h18"/>',
+  stock:'<path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 12l9 4 9-4"/><path d="M3 17l9 4 9-4"/>',
+  recv:'<path d="M3 6h11v9H3z"/><path d="M14 9h4l3 3v3h-7z"/><circle cx="7" cy="18" r="1.6"/><circle cx="17" cy="18" r="1.6"/>',
+  items:'<path d="M4 6h16M4 12h16M4 18h10"/>',
+  labels:'<path d="M3 3h8l10 10-8 8L3 11z"/><circle cx="7.5" cy="7.5" r="1.3"/>',
+  log:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
+  setup:'<path d="M4 6h9M18 6h2M4 12h3M12 12h8M4 18h9M18 18h2"/><circle cx="15.5" cy="6" r="2"/><circle cx="9.5" cy="12" r="2"/><circle cx="15.5" cy="18" r="2"/>',
+  more:'<circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/>',
+  lock:'<rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 018 0v3"/>'
+};
+const svg=k=>`<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
+
+const NAV=[
+  {v:'stock', l:'Stock',    i:'stock',  tip:'Stock|What is on the racks right now, and what needs ordering.'},
+  {v:'recv',  l:'Delivery', i:'recv',   full:'New delivery', tip:'New delivery|Book in material that has just arrived, with vendor and lot number.'},
+  {v:'items', l:'Items',    i:'items',  tip:'Items|Create and edit materials. This is where codes are assigned.'},
+  {v:'labels',l:'Labels',   i:'labels', tip:'Labels|Print rack labels, or export them for BarTender.'},
+  {v:'log',   l:'Log',      i:'log',    tip:'Log|Every movement ever recorded. Nothing here is ever deleted.'},
+  {v:'setup', l:'Setup',    i:'setup',  tip:'Setup|Database, operator name, scan screen and backups.'}
+];
+/* what the bottom bar shows, by who is holding the device */
+const BOT_FULL   = ['scan','stock','recv','log','more'];
+const BOT_SIMPLE = ['scan','stock','unlock'];
+
+let view='stock', unlocked=false;
+
+function go(v){
+  if(v==='scan'){ window.scrollTo({top:0,behavior:'smooth'});
+    if(!isTouch()) $('#scanInput').focus(); closeSheet(); paintNav(); return; }
+  view=v;
+  $$('section.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));
+  window.scrollTo({top:0,behavior:'smooth'});
+  closeSheet(); paintNav(); hideTip();
+}
+
+function locked(){ return !!+DB.settings.simple && !unlocked; }
+
+function paintNav(){
+  document.body.classList.toggle('locked',locked());
+  const allowed = locked() ? NAV.filter(n=>n.v==='stock') : NAV;
+
+  $('#topNav').innerHTML = allowed.map(n=>
+    `<button role="tab" data-v="${n.v}" data-tip="${esc(n.tip||'')}" aria-selected="${String(n.v===view)}">${svg(n.i)}${n.full||n.l}</button>`).join('')
+    + (locked()?'<span class="navgap"></span><button data-act="unlock">'+svg('lock')+'Admin</button>':'');
+
+  const keys = locked()?BOT_SIMPLE:BOT_FULL;
+  $('#botNav .items').innerHTML = keys.map(k=>{
+    if(k==='scan')   return `<button data-v="scan" data-tip="Scan|Jump to the scan box at the top." aria-selected="false">${svg('scan')}Scan</button>`;
+    if(k==='more')   return `<button data-act="more" data-tip="More|Items, Labels and Setup." aria-selected="${String(!BOT_FULL.includes(view))}">${svg('more')}More</button>`;
+    if(k==='unlock') return `<button data-act="unlock" data-tip="Admin screens|Hold for 2 seconds to unlock.">${svg('lock')}Admin</button>`;
+    const n=NAV.find(x=>x.v===k);
+    return `<button data-v="${n.v}" data-tip="${esc(n.tip||'')}" aria-selected="${String(n.v===view)}">${svg(n.i)}${n.l}</button>`;
+  }).join('');
+
+  $('#sheet .list').innerHTML = NAV.filter(n=>!BOT_FULL.includes(n.v))
+    .map(n=>`<button data-v="${n.v}">${svg(n.i)}${n.full||n.l}</button>`).join('')
+    + `<button data-act="close">${svg('more')}Close</button>`;
+
+  $$('#topNav button,#botNav button,#sheet button').forEach(b=>{
+    if(b.dataset.v) b.onclick=()=>go(b.dataset.v);
+    else if(b.dataset.act==='more')   b.onclick=openSheet;
+    else if(b.dataset.act==='close')  b.onclick=closeSheet;
+    else if(b.dataset.act==='unlock') holdToUnlock(b);
+  });
+}
+/* ---------- ripple ---------- */
+const RIPPLE_SEL='.btn,.big,.confirm,.pad button,.modes button,nav.tabs button,#botNav button,#sheet button,#camBtn,.lsel';
+document.addEventListener('pointerdown',e=>{
+  const el=e.target.closest(RIPPLE_SEL); if(!el)return;
+  const r=el.getBoundingClientRect(), d=Math.max(r.width,r.height)*2.2;
+  const sp=document.createElement('span'); sp.className='ripple';
+  sp.style.width=sp.style.height=d+'px';
+  sp.style.left=(e.clientX-r.left-d/2)+'px';
+  sp.style.top=(e.clientY-r.top-d/2)+'px';
+  el.appendChild(sp); setTimeout(()=>sp.remove(),520);
+});
+
+/* ---------- hover tooltips (pointer devices only) ---------- */
+const canHover=()=>matchMedia('(hover:hover) and (pointer:fine)').matches;
+let tipT=null;
+function showTip(el){
+  const raw=el.dataset.tip; if(!raw)return;
+  const [t,d]=raw.split('|');
+  const tip=$('#tip');
+  tip.innerHTML=`<div class="t">${esc(t)}</div>`+(d?`<div class="d">${esc(d)}</div>`:'');
+  tip.setAttribute('aria-hidden','false');
+  tip.style.left='0px'; tip.style.top='0px'; tip.classList.add('on');
+  const r=el.getBoundingClientRect(), b=tip.getBoundingClientRect();
+  let x=r.left+r.width/2-b.width/2;
+  x=Math.max(10,Math.min(x,innerWidth-b.width-10));
+  let y=r.bottom+10;
+  if(y+b.height>innerHeight-10) y=Math.max(10,r.top-b.height-10);
+  tip.style.left=x+'px'; tip.style.top=y+'px';
+}
+function hideTip(){ clearTimeout(tipT); const t=$('#tip');
+  t.classList.remove('on'); t.setAttribute('aria-hidden','true'); }
+document.addEventListener('pointerover',e=>{
+  if(!canHover())return;
+  const el=e.target.closest('[data-tip]');
+  if(!el){hideTip();return;}
+  clearTimeout(tipT); tipT=setTimeout(()=>showTip(el),260);
+});
+document.addEventListener('pointerout',e=>{ if(e.target.closest('[data-tip]')) hideTip(); });
+document.addEventListener('pointerdown',hideTip);
+window.addEventListener('scroll',hideTip,{passive:true});
+document.addEventListener('focusin',e=>{ const el=e.target.closest('[data-tip]');
+  if(el&&canHover())showTip(el); else hideTip(); });
+
+function openSheet(){ $('#sheet').classList.add('on'); $('#sheetBg').classList.add('on'); }
+function closeSheet(){ $('#sheet').classList.remove('on'); $('#sheetBg').classList.remove('on'); }
+$('#sheetBg').onclick=closeSheet;
+
+/* Hold for 1.5 s. Stops accidents, not determined people —
+   there is no login, so treat this as a guard rail, not security. */
+function holdToUnlock(btn){
+  let t=null;
+  const start=e=>{ e.preventDefault(); btn.style.color='var(--blue)';
+    t=setTimeout(()=>{ unlocked=true; paintNav(); go('setup'); toast('Admin screens unlocked'); },1500); };
+  const stop=()=>{ clearTimeout(t); btn.style.color=''; };
+  btn.onmousedown=start; btn.ontouchstart=start;
+  btn.onmouseup=stop; btn.onmouseleave=stop; btn.ontouchend=stop; btn.ontouchcancel=stop;
+  btn.onclick=()=>toast('Hold this button for 2 seconds');
+}
+
+function resetItemForm(){editing=null;
+  ['fName','fCode','fCat','fSup','fLoc','fNote'].forEach(i=>$('#'+i).value='');
+  $('#fUnit').value='pcs';$('#fMin').value=0;$('#fRate').value=0;
+  $('#fPack').value='';$('#fPer').value=0;$('#fMinBasis').value='pack';$('#fWhole').value='0';$('#fSerial').value='0';
+  packPreview();
+  $('#itemTitle').textContent='Create item';$('#saveItem').textContent='Save item';$('#cancelItem').style.display='none';
+  previewCode();}
+$('#cancelItem').onclick=resetItemForm;
+
+function previewCode(){
+  const el=$('#codePrev'); if(!el)return;
+  if(editing||$('#fCode').value.trim()){ el.textContent=''; return; }
+  const c=$('#fCat').value.trim();
+  const r=catRule(c);
+  el.innerHTML=(c?catDot(c):'')+'Will be saved as '+esc(nextItemCode(c))
+    +(r?'':'  (no rule for this category — using the fallback prefix)');
+}
+function packPreview(){
+  const pack=$('#fPack').value, per=numv($('#fPer').value), unit=$('#fUnit').value.trim()||'pcs';
+  $('#fPerLbl').textContent = pack ? (unit+' per '+pack) : 'Per pack';
+  $('#fPer').disabled=!pack;
+  $('#packPrev').textContent = pack&&per>0
+    ? ('1 '+pack+' = '+fmt(per)+' '+unit+($('#fWhole').value==='1'?' · issued as whole '+plural(pack,2):''))
+    : (pack?'Set how many are in one '+pack:'Counted loose in '+unit);
+  const wsel=$('#fWhole'); wsel.disabled=!(pack&&per>0);
+  const ssel=$('#fSerial'); ssel.disabled=!(pack&&per>0);
+  if(!pack||per<=0){ wsel.value='0'; ssel.value='0'; }
+  const bsel=$('#fMinBasis'); bsel.disabled=!pack;
+  if(!pack) bsel.value='base';
+  const raw=numv($('#fMin').value);
+  const stub={pack,packQty:per,unit};
+  const base = bsel.value==='pack' ? toBase(stub,raw) : raw;
+  $('#minPrev').textContent = raw>0
+    ? ('Red flag below '+fmt(base)+' '+unit+(pack&&per>0?' ('+fmt(Math.round(toPacks(stub,base)*100)/100)+' '+packName(stub,toPacks(stub,base))+')':''))
+    : 'No reorder warning';
+}
+/* picking a category fills its house rule; you can still override */
+function applyCatDefaults(){
+  if(editing)return;
+  const r=catRule($('#fCat').value); if(!r)return;
+  if(r.unit) $('#fUnit').value=r.unit;
+  if(r.pack!==undefined) $('#fPack').value=r.pack||'';
+  if(r.packQty) $('#fPer').value=r.packQty;
+  $('#fWhole').value=r.whole?'1':'0'; $('#fSerial').value=r.serial?'1':'0';
+  if(r.minPacks!==undefined&&r.minPacks!==null){$('#fMinBasis').value='pack';$('#fMin').value=r.minPacks;}
+  else if(r.minBase!==undefined&&r.minBase!==null){$('#fMinBasis').value='base';$('#fMin').value=r.minBase;}
+  packPreview();
+}
+['fPack','fPer','fUnit','fMin','fMinBasis','fWhole','fSerial'].forEach(id=>$('#'+id).addEventListener('input',packPreview));
+$('#fWhole').addEventListener('change',packPreview);
+$('#fPack').addEventListener('change',packPreview);
+$('#fMinBasis').addEventListener('change',packPreview);
+$('#fCat').addEventListener('change',applyCatDefaults);
+$('#fCat').addEventListener('input',previewCode);
+$('#fCode').addEventListener('input',previewCode);
+
+$('#saveItem').onclick=async()=>{
+  const pack=$('#fPack').value, per=numv($('#fPer').value);
+  const stub={pack,packQty:per,unit:$('#fUnit').value.trim()||'pcs'};
+  const rawMin=numv($('#fMin').value);
+  const basis=$('#fMinBasis').value;
+  const whole  = pack&&per>0 && $('#fWhole').value==='1';
+  const serial = pack&&per>0 && $('#fSerial').value==='1';
+  const d={name:$('#fName').value.trim(),code:$('#fCode').value.trim().toUpperCase(),
+    cat:$('#fCat').value.trim(),unit:stub.unit,pack:pack,packQty:per,whole:whole,serial:serial,
+    minBasis:basis,
+    min: basis==='pack' ? toBase(stub,rawMin) : rawMin,
+    rate:numv($('#fRate').value),sup:$('#fSup').value.trim(),loc:$('#fLoc').value.trim(),note:$('#fNote').value.trim()};
+  if(pack&&per<=0){toast('Set how many are in one '+pack,true);$('#fPer').focus();return;}
+  if(!d.name){toast('Item name is required',true);$('#fName').focus();return;}
+  if(d.code&&!c128bits(d.code)){toast('That code cannot go into a barcode',true);return;}
+  if(editing){
+    const it=item(editing); if(!it){resetItemForm();return;}
+    if(d.code&&d.code!==it.code&&item(d.code)){toast('Code already used',true);return;}
+    const oldCode=it.code; Object.assign(it,d,{code:d.code||it.code});
+    if(oldCode!==it.code){DB.batches.forEach(b=>{if(b.code===oldCode)b.code=it.code;});
+      DB.moves.forEach(m=>{if(m.code===oldCode)m.code=it.code;});}
+    await pushItem(it,false); toast('Updated '+it.code);
+  }else{
+    if(d.code&&item(d.code)){toast('Code already used',true);return;}
+    const it=Object.assign({},d,{code:d.code||nextItemCode(d.cat)});
+    DB.items.push(it); await pushItem(it,true); toast('Created '+it.code);
+  }
+  resetItemForm(); render();
+};
+function editItem(code){const it=item(code);if(!it)return;editing=it.code;
+  $('#fName').value=it.name;$('#fCode').value=it.code;$('#fCat').value=it.cat;$('#fUnit').value=it.unit;
+  $('#fMin').value=it.min;$('#fRate').value=it.rate;$('#fSup').value=it.sup;$('#fLoc').value=it.loc;$('#fNote').value=it.note;
+  $('#itemTitle').textContent='Edit '+it.code;$('#saveItem').textContent='Update item';$('#cancelItem').style.display='';
+  go('items');$('#fName').focus();}
+
+/* ---------- new delivery ---------- */
+function delUnits(){
+  const it=item($('#dItem').value); const sel=$('#dUnit');
+  if(!it){sel.innerHTML='';return;}
+  sel.innerHTML = (hasPack(it)?`<option value="pack">${esc(packName(it,2))}</option>`:'')
+                + (isWhole(it)?'':`<option value="base">${esc(it.unit)}</option>`);
+  delPrev();
+}
+function delPrev(){
+  const it=item($('#dItem').value); if(!it){$('#dPrev').textContent='';return;}
+  const n=numv($('#dQty').value);
+  const base=$('#dUnit').value==='pack'?toBase(it,n):n;
+  $('#dPrev').textContent = n>0
+    ? ('Books in '+qtyText(it,base)) : (packText(it)||'');
+  $('#dLbl').value = ($('#dUnit').value==='pack'&&n>0) ? Math.min(200,Math.ceil(n)) : $('#dLbl').value;
+}
+$('#dItem').onchange=()=>{const it=item($('#dItem').value);
+  if(it&&!numv($('#dRate').value))$('#dRate').value=it.rate; delUnits();};
+$('#dQty').addEventListener('input',delPrev);
+$('#dUnit').addEventListener('change',delPrev);
+$('#saveDel').onclick=async()=>{
+  const it=item($('#dItem').value);
+  const typed=numv($('#dQty').value);
+  const inPacks=$('#dUnit').value==='pack'&&hasPack(it);
+  const q=inPacks?toBase(it,typed):typed;
+  if(!it){toast('Pick an item',true);return;}
+  if(q<=0){toast('Enter the quantity received',true);$('#dQty').focus();return;}
+  if(isWhole(it)&&typed%1!==0){toast(it.name+' comes in whole '+packName(it,2)+' — enter a whole number',true);$('#dQty').focus();return;}
+  const d=$('#dDate').value||today();
+  const meta={ven:$('#dVen').value.trim(),lot:$('#dLot').value.trim(),
+    recv:d,exp:$('#dExp').value,rate:numv($('#dRate').value)};
+  const note='Delivery'+(meta.ven?' from '+meta.ven:'')+(meta.lot?' · lot '+meta.lot:'');
+  let made=[];
+  if(isSerial(it)){
+    const n=Math.round(inPacks?typed:toPacks(it,q));
+    if(n<1){toast('Enter how many '+packName(it,2)+' arrived',true);return;}
+    if(n>200&&!confirm('Create '+n+' separate '+packName(it,n)+', each with its own code and label?'))return;
+    for(let k=0;k<n;k++){
+      const bb=Object.assign({bcode:nextBatchCode(it.code),code:it.code,qty0:packSize(it)},meta);
+      DB.batches.push(bb); made.push(bb);
+      await pushBatch(bb);
+      await pushMove({id:uid(),ts:nowISO(),bcode:bb.bcode,code:it.code,type:'IN',
+        qty:packSize(it),note:note,user:DB.settings.user||'—'});
+    }
+    lastMove=null;
+  }else{
+    const bb=Object.assign({bcode:nextBatchCode(it.code),code:it.code,qty0:q},meta);
+    DB.batches.push(bb); made.push(bb); await pushBatch(bb);
+    const mv={id:uid(),ts:nowISO(),bcode:bb.bcode,code:it.code,type:'IN',qty:q,note:note,user:DB.settings.user||'—'};
+    await pushMove(mv); lastMove=mv;
+  }
+  const b=made[0];
+  if(b.rate&&b.rate!==it.rate){it.rate=b.rate;await pushItem(it,false);}
+  const copies=Math.max(0,Math.min(200,parseInt($('#dLbl').value)||0));
+  $('#delPrev').style.display='';
+  $('#delLabel').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
+  $('#delLabel').dataset.bc=b.bcode;
+  $('#delLabel').innerHTML=made.map(x=>labelHTML(x,it,false)).join('');
+  $('#delPrint').onclick=()=>{
+    let h='';
+    if(made.length>1) h=made.map(x=>labelHTML(x,it,false)).join('');
+    else for(let i=0;i<Math.max(1,copies);i++)h+=labelHTML(b,it,false);
+    $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
+    $('#printGrid').innerHTML=h;window.print();};
+  $('#delHint').textContent = made.length>1
+    ? (made.length+' '+packName(it,made.length)+' booked in — '+made[0].bcode+' to '+made[made.length-1].bcode+'. Each needs its own label.')
+    : ('Batch '+b.bcode+' booked in.');
+  $('#dQty').value=0;$('#dLot').value='';
+  toast('Booked in '+(inPacks?fmt(typed)+' '+packName(it,typed):fmt(q)+' '+it.unit));
+  render();
+};
+
+/* ---------- labels ---------- */
+function labelStyle(){const el=$('#lblSize');return el?el.value:'mini';}
+
+/* 25 x 15 mm, QR only. Everything is sized in mm so what prints is
+   the real thing, not a scaled screenshot. */
+function miniLabel(b,it,chk){
+  const code=b?b.bcode:it.code;
+  const packbit=hasPack(it)?(it.pack.toUpperCase()+' '+fmt(packSize(it))+' '+it.unit):'';
+  const meta=b?(b.lot?'LOT '+b.lot:(b.recv||'')):(packbit||(it.loc?'RACK '+it.loc:(it.unit||'')));
+  return `<div class="minihold">
+    ${chk?`<label class="lsel"><input type="checkbox" class="lchk" value="${esc(code)}" checked>print</label>`:''}
+    <div class="label mini">
+      <div class="qr">${qrSVG(code)}</div>
+      <div class="side">
+        <div class="lnm">${esc(it.name)}</div>
+        <div class="lcode">${esc(code)}</div>
+        ${meta?`<div class="lmeta">${esc(meta)}</div>`:''}
+      </div>
+    </div></div>`;
+}
+
+function bigLabel(b,it,chk){
+  const code=b?b.bcode:it.code;
+  const l2=b?[b.ven,b.lot&&'LOT '+b.lot,b.recv].filter(Boolean).join(' · ')
+            :[it.cat,it.loc&&'RACK '+it.loc].filter(Boolean).join(' · ');
+  const l3=b?[it.unit,it.loc&&'RACK '+it.loc,b.exp&&'EXP '+b.exp].filter(Boolean).join(' · '):it.unit;
+  return `<div class="label">
+    ${chk?`<label class="lsel"><input type="checkbox" class="lchk" value="${esc(code)}" checked>print</label>`:''}
+    <div class="top"><div class="qr">${qrSVG(code)}</div>
+      <div style="min-width:0"><div class="lnm">${esc(it.name)}</div>
+      <div class="lmeta">${esc(l2||'')}</div><div class="lmeta">${esc(l3||'')}</div></div></div>
+    <div class="bar">${barSVG(code,34)}</div>
+    <div class="lcode">${esc(code)}</div></div>`;
+}
+
+function labelHTML(b,it,chk){
+  return labelStyle()==='mini' ? miniLabel(b,it,chk) : bigLabel(b,it,chk);
+}
+$('#lblKind').onchange=renderLabels;
+$('#lblSize').onchange=()=>{renderLabels();
+  if($('#delPrev').style.display!=='none'){const el=$('#delLabel');if(el&&el.dataset.bc){
+    const b=batch(el.dataset.bc);if(b){el.className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
+      el.innerHTML=labelHTML(b,item(b.code),false);}}}};
+$('#lAll').onclick=()=>$$('.lchk').forEach(c=>c.checked=true);
+$('#lNone').onclick=()=>$$('.lchk').forEach(c=>c.checked=false);
+$('#lPrint').onclick=()=>{
+  const picked=$$('.lchk').filter(c=>c.checked).map(c=>c.value);
+  if(!picked.length){toast('Tick at least one label',true);return;}
+  const n=Math.max(1,Math.min(200,parseInt($('#lCopies').value)||1));
+  let h='';
+  picked.forEach(code=>{const b=batch(code),it=b?item(b.code):item(code);
+    if(it)for(let i=0;i<n;i++)h+=labelHTML(b,it,false);});
+  $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
+  $('#printGrid').innerHTML=h;window.print();
+};
+
+/* ---------- category rules ---------- */
+function renderCats(){
+  const tb=$('#tCats tbody'); if(!tb)return;
+  const used={};
+  DB.items.forEach(i=>{const k=(i.cat||'').trim().toLowerCase(); used[k]=(used[k]||0)+1;});
+  tb.innerHTML=cats().map((c,ix)=>{
+    const n=used[c.name.trim().toLowerCase()]||0;
+    const stub={pack:c.pack,packQty:c.packQty,unit:c.unit||'pcs'};
+    const rule = c.pack&&c.packQty
+      ? ('1 '+c.pack+' = '+fmt(c.packQty)+' '+(c.unit||'pcs')+(c.whole?' · whole '+plural(c.pack,2)+' only':'')+(c.serial?' · code per '+c.pack:''))
+      : ('loose · '+(c.unit||'pcs'));
+    const flag = c.minPacks!=null ? ('flag under '+fmt(c.minPacks)+' '+packName(stub,c.minPacks))
+               : c.minBase!=null  ? ('flag under '+fmt(c.minBase)+' '+(c.unit||'pcs')) : 'no flag';
+    return `<tr>
+      <td>${catChip(c.name)}</td>
+      <td class="code">${esc(c.prefix)}</td>
+      <td style="font-size:12.5px">${esc(rule)}<div class="rcd" style="font-size:11px">${esc(flag)}</div></td>
+      <td class="num">${n}</td>
+      <td class="code">${esc(nextItemCode(c.name))}</td>
+      <td><input type="color" class="swatch" value="${esc(catCol(c.name))}" data-col="${ix}"
+            title="Colour for ${esc(c.name)}">
+          <button class="btn ghost sm" data-cx="${ix}">Remove</button></td></tr>`;
+  }).join('');
+  const extra=[...new Set(DB.items.map(i=>(i.cat||'').trim()).filter(Boolean))]
+    .filter(c=>!catRule(c));
+  if(extra.length){
+    tb.innerHTML+=extra.map(c=>`<tr>
+      <td>${catChip(c)} <span class="pill">No rule</span></td>
+      <td class="code">${esc(DB.settings.prefix||'RM')}</td>
+      <td style="font-size:12.5px">—</td>
+      <td class="num">${used[c.toLowerCase()]||0}</td>
+      <td class="code">—</td>
+      <td><button class="btn ghost sm" data-addc="${esc(c)}">Add rule</button></td></tr>`).join('');
+  }
+  if(!cats().length&&!extra.length)
+    tb.innerHTML='<tr><td colspan="6" class="empty" style="padding:26px">No categories yet. Add one below.</td></tr>';
+
+  tb.querySelectorAll('[data-col]').forEach(inp=>inp.onchange=()=>{
+    cats()[+inp.dataset.col].col=inp.value; persistLocal(); render();
+  });
+  tb.querySelectorAll('[data-cx]').forEach(b=>b.onclick=()=>{
+    const c=cats()[+b.dataset.cx];
+    if(!confirm('Remove the rule for "'+c.name+'"?\nItems keep their existing codes; new ones fall back to '+(DB.settings.prefix||'RM')+'.'))return;
+    DB.settings.cats.splice(+b.dataset.cx,1); persistLocal(); render(); toast('Rule removed');
+  });
+  tb.querySelectorAll('[data-addc]').forEach(b=>b.onclick=()=>{
+    $('#newCat').value=b.dataset.addc;
+    $('#newPre').value=b.dataset.addc.replace(/[^A-Za-z]/g,'').slice(0,3).toUpperCase();
+    $('#newPre').focus();
+  });
+}
+$('#addCat').onclick=()=>{
+  const name=$('#newCat').value.trim();
+  const pre=$('#newPre').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
+  if(!name){toast('Type a category name',true);$('#newCat').focus();return;}
+  if(!pre){toast('Type a prefix, e.g. TRM',true);$('#newPre').focus();return;}
+  if(catRule(name)){toast('That category already has a rule',true);return;}
+  const clash=cats().find(c=>c.prefix===pre);
+  if(clash){toast('Prefix '+pre+' is already used by '+clash.name,true);return;}
+  const rule={name,prefix:pre,unit:($('#newUnit').value.trim()||'pcs'),
+    pack:$('#newPack').value||'',packQty:numv($('#newPer').value),
+    whole:$('#newWhole').value==='1',serial:$('#newSerial').value==='1',
+    col:$('#newCol').value};
+  const m=numv($('#newMin').value);
+  if(m>0){ if($('#newBasis').value==='pack'&&rule.pack&&rule.packQty>0) rule.minPacks=m; else rule.minBase=m; }
+  DB.settings.cats=cats().concat([rule]);
+  persistLocal();
+  ['newCat','newPre','newUnit','newPer','newMin'].forEach(i=>$('#'+i).value='');
+  $('#newPack').value='';
+  render(); toast('Rule added — new '+name.toLowerCase()+' get '+pre+'-0001');
+};
+
+/* ---------- bulk add ---------- */
+$('#bulkGo').onclick=async()=>{
+  const lines=$('#bulkTxt').value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean);
+  if(!lines.length){toast('Paste some lines first',true);return;}
+  const made=[],skipped=[];
+  for(const line of lines){
+    const p=line.split(',').map(x=>x.trim());
+    const name=p[0]; if(!name)continue;
+    if(DB.items.some(i=>i.name.toLowerCase()===name.toLowerCase())){skipped.push(name);continue;}
+    const cat=p[1]||'', r=catRule(cat)||{};
+    let packRaw = p[2]!==undefined&&p[2]!=='' ? p[2].toLowerCase() : (r.pack||'');
+    let whole = r.whole||false;
+    if(/\bwhole\b/.test(packRaw)){ whole=true; packRaw=packRaw.replace(/\bwhole\b/g,'').trim(); }
+    const pack = packRaw==='loose'?'':packRaw;
+    if(!pack) whole=false;
+    const per  = p[3]!==undefined&&p[3]!=='' ? numv(p[3]) : (r.packQty||0);
+    const unit = r.unit||'pcs';
+    const stub={pack,packQty:per,unit};
+    let min;
+    if(p[4]!==undefined&&p[4]!==''){ min = pack&&per>0 ? toBase(stub,numv(p[4])) : numv(p[4]); }
+    else if(r.minPacks!=null){ min = toBase(stub,r.minPacks); }
+    else if(r.minBase!=null){ min = r.minBase; }
+    else min = 0;
+    made.push({code:nextItemCode(cat),name:name,cat:cat,unit:unit,pack:pack,packQty:per,whole:whole,serial:serial,
+      minBasis:(pack&&per>0)?'pack':'base',min:min,rate:numv(p[5]),sup:'',loc:'',note:''});
+  }
+  if(!made.length){toast('Nothing new to add',true);$('#bulkHint').textContent=skipped.length+' name(s) already exist.';return;}
+  DB.items.push(...made); persistLocal();
+  if(SB.on){ try{ await SB.post('items',made.map(i=>({code:i.code,name:i.name,category:i.cat,unit:i.unit,
+      min_qty:i.min,rate:i.rate,supplier:i.sup,location:i.loc,notes:i.note}))); }
+    catch(e){ toast('Created here, but not synced to cloud',true); } }
+  $('#bulkTxt').value='';
+  $('#bulkHint').textContent='Created '+made.length+' item'+(made.length===1?'':'s')+
+    (skipped.length?', skipped '+skipped.length+' already present':'')+'. Codes '+made[0].code+' to '+made[made.length-1].code+'.';
+  toast('Created '+made.length+' items'); render();
+};
+
+/* ---------- BarTender export ---------- */
+const BT_HEAD=['CODE','NAME','CATEGORY','UNIT','PACK','PERPACK','ISSUEDAS','RACK','VENDOR','LOT','RECEIVED','EXPIRY','COPIES'];
+function btRow(code,copies){
+  const b=batch(code), it=b?item(b.code):item(code);
+  if(!it) return null;
+  return [code,it.name,it.cat||'',it.unit||'',it.pack||'',packSize(it)||'',
+          isWhole(it)?('whole '+packName(it,2)):'any qty',it.loc||'',
+          b?(b.ven||''):'', b?(b.lot||''):'', b?(b.recv||''):'', b?(b.exp||''):'', copies];
+}
+function btDownload(rows,tag){
+  if(!rows.length){toast('Nothing to export',true);return;}
+  download('bartender-'+tag+'-'+today()+'.csv',csv([BT_HEAD,...rows]));
+  toast('Exported '+rows.length+' row'+(rows.length===1?'':'s')+' for BarTender');
+}
+$('#btExport').onclick=()=>{
+  const n=Math.max(1,Math.min(999,parseInt($('#lCopies').value)||1));
+  const rows=$$('.lchk').filter(c=>c.checked).map(c=>btRow(c.value,n)).filter(Boolean);
+  btDownload(rows,'selected');
+};
+$('#btAll').onclick=()=>{
+  const rows=[...DB.items.map(i=>btRow(i.code,1)),...DB.batches.map(b=>btRow(b.bcode,1))].filter(Boolean);
+  btDownload(rows,'all-codes');
+};
+
+/* ---------- CSV / backup ---------- */
+const csv=rows=>rows.map(r=>r.map(c=>{const s=String(c==null?'':c);
+  return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;}).join(',')).join('\r\n');
+function download(name,text,type){const b=new Blob([text],{type:type||'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1500);}
+$('#csvStock').onclick=()=>{const {byItem}=stockMaps();
+  download('stock-'+today()+'.csv',csv([['Code','Item','Category','On hand','Unit','Reorder','Rate','Value','Supplier','Rack'],
+    ...DB.items.map(i=>[i.code,i.name,i.cat,byItem[i.code]||0,i.unit,i.min,i.rate,
+      Math.round((byItem[i.code]||0)*i.rate*100)/100,i.sup,i.loc])]));toast('Exported');};
+$('#csvLog').onclick=()=>download('log-'+today()+'.csv',
+  csv([['When','Item code','Batch code','Item','Type','Qty','Operator','Note'],
+    ...DB.moves.map(m=>[m.ts,m.code,m.bcode,(item(m.code)||{}).name||'',m.type,m.qty,m.user,m.note])]));
+$('#bkDown').onclick=()=>{download('storectl-backup-'+nowISO().slice(0,19).replace(/[:T]/g,'-')+'.json',
+  JSON.stringify(DB,null,2),'application/json');toast('Backup downloaded');};
+$('#bkUp').onclick=()=>$('#bkFile').click();
+$('#bkFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.items))throw 0;
+    if(!confirm('Replace everything on this device?\n'+d.items.length+' items, '+(d.moves||[]).length+' movements.'))return;
+    DB={items:d.items,batches:d.batches||[],moves:d.moves||[],seq:d.seq||d.items.length+1,
+      settings:Object.assign(DB.settings,d.settings||{})};
+    persistLocal();loadSettings();render();toast('Restored');}catch(x){toast('Not a valid backup',true);}};
+  r.readAsText(f);e.target.value='';};
+$('#bkWipe').onclick=()=>{if(!confirm('Erase all data on this device?'))return;
+  if(!confirm('Download a backup first if you have not. Erase now?'))return;
+  DB={items:[],batches:[],moves:[],seq:1,settings:DB.settings};persistLocal();render();toast('Erased');};
+
+/* ---------- settings / backend ---------- */
+function loadSettings(){const s=DB.settings;
+  $('#sUser').value=s.user||'';$('#sPrefix').value=s.prefix;$('#sCur').value=s.cur;
+  $('#sExp').value=s.expDays;$('#sBeep').value=String(s.beep);$('#sSimple').value=String(s.simple||0);
+  document.body.classList.toggle('simple',!!+s.simple);
+  $('#backend').value=s.backend;$('#sbUrl').value=s.sbUrl||'';$('#sbKey').value=s.sbKey||'';
+  $('#cloudCfg').style.display=s.backend==='cloud'?'':'none';}
+$('#backend').onchange=()=>{const c=$('#backend').value==='cloud';
+  $('#cloudCfg').style.display=c?'':'none';
+  $('#beHint').textContent=c?'Not connected yet — paste the URL and key, then Save & connect.':'Data stays in this browser.';};
+$('#saveSet').onclick=()=>{const s=DB.settings;
+  s.user=$('#sUser').value.trim();s.prefix=($('#sPrefix').value.trim()||'RM').toUpperCase();
+  s.cur=$('#sCur').value.trim()||'₹';s.expDays=Math.max(1,parseInt($('#sExp').value)||30);
+  s.beep=+$('#sBeep').value;s.simple=+$('#sSimple').value;
+  document.body.classList.toggle('simple',!!s.simple);
+  if(s.simple){mode='ASK';unlocked=true;}
+  paintNav();
+  persistLocal();render();toast('Settings saved');};
+$('#saveBackend').onclick=async()=>{
+  DB.settings.backend=$('#backend').value;
+  DB.settings.sbUrl=sbBase($('#sbUrl').value);DB.settings.sbKey=$('#sbKey').value.trim();
+  $('#sbUrl').value=DB.settings.sbUrl;
+  persistLocal();
+  if(SB.on){ try{ await SB.pull(); persistLocal(); render(); toast('Connected — loaded from the shared database'); }
+    catch(e){ const m=String(e.message);
+      toast(/PGRST125|PGRST 125/.test(m)
+        ? 'Wrong URL path — use just https://xxxx.supabase.co'
+        : 'Could not connect: '+m.slice(0,60), true); } }
+  else { render(); toast('Using this device only'); }
+};
+$('#testBackend').onclick=async()=>{
+  const u=$('#sbUrl').value.trim(),k=$('#sbKey').value.trim();
+  if(!u||!k){toast('Fill in both the URL and the key',true);return;}
+  try{const r=await fetch(sbBase(u)+'/rest/v1/items?select=code&limit=1',
+      {headers:{apikey:k,Authorization:'Bearer '+k}});
+    if(r.ok){toast('Connection works');}else{toast('Server said: '+(await r.text()).slice(0,70),true);}
+  }catch(e){toast('Could not reach it: '+String(e.message).slice(0,60),true);}
+};
+$('#pushLocal').onclick=async()=>{
+  if(!SB.on){toast('Set up the shared database first',true);return;}
+  if(!confirm('Upload '+DB.items.length+' items, '+DB.batches.length+' batches and '+DB.moves.length+' movements to the shared database?'))return;
+  try{
+    if(DB.items.length) await SB.post('items',DB.items.map(i=>({code:i.code,name:i.name,category:i.cat,
+      unit:i.unit,min_qty:i.min,rate:i.rate,supplier:i.sup,location:i.loc,notes:i.note})));
+    if(DB.batches.length) await SB.post('batches',DB.batches.map(b=>({batch_code:b.bcode,item_code:b.code,
+      vendor:b.ven||null,lot_no:b.lot||null,received_on:b.recv||null,expiry:b.exp||null,rate:b.rate||0})));
+    if(DB.moves.length) await SB.post('movements',DB.moves.map(m=>({id:m.id,item_code:m.code,
+      batch_code:m.bcode||null,kind:m.type,qty:m.qty,note:m.note||null,operator:m.user||null,created_at:m.ts})));
+    toast('Uploaded');
+  }catch(e){toast('Upload failed: '+String(e.message).slice(0,70),true);}
+};
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const dTo=d=>d?Math.ceil((new Date(d+'T00:00:00')-new Date().setHours(0,0,0,0))/86400000):null;
+const whenStr=iso=>{const d=new Date(iso);
+  return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})+' '+
+         d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});};
+
+$('#q').oninput=renderStock; $('#fLow').onchange=renderStock; $('#qm').oninput=renderLog;
+
+function renderStock(){
+  const {byItem,byBatch}=stockMaps();
+  const q=$('#q').value.trim().toLowerCase(), lowOnly=$('#fLow').checked;
+  const rows=DB.items.filter(i=>{
+    const oh=byItem[i.code]||0;
+    if(lowOnly&&!(i.min>0&&oh<=i.min))return false;
+    if(!q)return true;
+    return [i.code,i.name,i.cat,i.sup,i.loc].join(' ').toLowerCase().includes(q);
+  }).sort((a,b)=>a.name.localeCompare(b.name));
+
+  $('#tStock tbody').innerHTML=rows.map(i=>{
+    const oh=byItem[i.code]||0, low=i.min>0&&oh<=i.min;
+    const kids=DB.batches.filter(b=>b.code===i.code&&(byBatch[b.bcode]||0)>0);
+    const soon=kids.filter(b=>{const d=dTo(b.exp);return d!==null&&d<=DB.settings.expDays;}).length;
+    return `<tr class="${low?'low':''}">
+      <td class="code">${esc(i.code)}</td>
+      <td>${catDot(i.cat)}${esc(i.name)}${low?' <span class="pill">Reorder</span>':''}${hasPack(i)?'<div class="rcd" style="font-size:11px;opacity:.6">'+esc(packText(i))+'</div>':''}</td>
+      <td class="num">${isWhole(i)
+          ? fmt(Math.round(toPacks(i,oh)*100)/100)+' <span style="opacity:.6">'+esc(packName(i,toPacks(i,oh)))+'</span>'
+          : fmt(oh)+' <span style="opacity:.6">'+esc(unitName(i,oh))+'</span>'}</td>
+      <td class="num">${!hasPack(i) ? '—' : (isWhole(i)
+          ? fmt(oh)+' <span style="opacity:.6">'+esc(unitName(i,oh))+'</span>'
+          : fmt(Math.round(toPacks(i,oh)*100)/100)+' <span style="opacity:.6">'+esc(packName(i,toPacks(i,oh)))+'</span>')}</td>
+      <td class="num">${fmt(i.min)}${hasPack(i)&&i.min>0?' <span style="opacity:.6">('+fmt(Math.round(toPacks(i,i.min)*100)/100)+')</span>':''}</td>
+      <td class="num">${money(oh*i.rate)}</td>
+      <td>${esc(i.loc||'—')}</td>
+      <td class="code">${kids.length}${isSerial(i)&&kids.length?' <span style="opacity:.6">open</span>':''}${soon?' <span class="pill exp">'+soon+' expiring</span>':''}</td></tr>`;
+  }).join('');
+  $('#eStock').style.display=DB.items.length?'none':'';
+  $('#tStock').style.display=DB.items.length?'':'none';
+
+  const low=DB.items.filter(i=>i.min>0&&(byItem[i.code]||0)<=i.min)
+    .sort((a,b)=>((byItem[a.code]||0)-a.min)-((byItem[b.code]||0)-b.min));
+  $('#tLow tbody').innerHTML=low.map(i=>{const oh=byItem[i.code]||0;
+    const short=Math.max(0,i.min-oh);
+    const need=hasPack(i)?Math.ceil(toPacks(i,short)):short;
+    return `<tr class="low"><td class="code">${esc(i.code)}</td><td>${catDot(i.cat)}${esc(i.name)}</td>
+      <td class="num">${esc(qtyText(i,oh))}</td><td class="num">${esc(qtyText(i,i.min))}</td>
+      <td class="num">${fmt(need)} ${esc(hasPack(i)?packName(i,need):i.unit)}</td>
+      <td>${esc(i.sup||'—')}</td></tr>`;}).join('');
+  $('#eLow').style.display=low.length?'none':'';
+  $('#tLow').style.display=low.length?'':'none';
+
+  const val=DB.items.reduce((s,i)=>s+(byItem[i.code]||0)*i.rate,0);
+  const openB=DB.batches.filter(b=>(byBatch[b.bcode]||0)>0).length;
+  const exp=DB.batches.filter(b=>{const d=dTo(b.exp);return d!==null&&d<=DB.settings.expDays&&(byBatch[b.bcode]||0)>0;}).length;
+  const td=DB.moves.filter(m=>m.ts.slice(0,10)===today()).length;
+  $('#stats').innerHTML=[['Items',DB.items.length,0],['Stock value',money(val),0],
+    ['Below reorder',low.length,low.length>0],['Open batches',openB,0],
+    ['Expiring soon',exp,exp>0],['Scans today',td,0]]
+    .map(([k,v,a])=>`<div class="stat ${a?'alert':''}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+}
+
+function renderItems(){
+  $('#tItems tbody').innerHTML=DB.items.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(i=>`<tr>
+    <td class="code">${esc(i.code)}</td><td>${esc(i.name)}</td><td>${catChip(i.cat)}</td>
+    <td class="code" style="font-size:12px">${esc(packText(i)||('loose · '+i.unit))}</td>
+    <td class="num">${esc(qtyText(i,i.min))}</td><td class="num">${fmt(i.rate)}</td>
+    <td>${esc(i.sup||'—')}</td>
+    <td><button class="btn ghost sm" data-e="${esc(i.code)}">Edit</button></td></tr>`).join('');
+  $('#eItems').style.display=DB.items.length?'none':'';
+  $$('#tItems [data-e]').forEach(b=>b.onclick=()=>editItem(b.dataset.e));
+  const opts=DB.items.slice().sort((a,b)=>a.name.localeCompare(b.name))
+    .map(i=>`<option value="${esc(i.code)}">${esc(i.name)} — ${esc(i.code)}</option>`).join('');
+  const cur=$('#dItem').value; $('#dItem').innerHTML=opts; if(cur)$('#dItem').value=cur;
+  delUnits();
+  const allCats=[...new Set(cats().map(c=>c.name).concat(DB.items.map(i=>i.cat).filter(Boolean)))];
+  $('#catL').innerHTML=allCats.map(c=>`<option>${esc(c)}</option>`).join('');
+  $('#venL').innerHTML=[...new Set(DB.batches.map(b=>b.ven).filter(Boolean))].map(c=>`<option>${esc(c)}</option>`).join('');
+  if(!$('#dDate').value)$('#dDate').value=today();
+}
+
+function renderLabels(){
+  const kind=$('#lblKind').value;
+  let html='';
+  if(kind==='batch'){
+    const {byBatch}=stockMaps();
+    const bs=DB.batches.slice().sort((a,b)=>(b.recv||'').localeCompare(a.recv||''));
+    html=bs.map(b=>{const it=item(b.code);return it?labelHTML(b,it,true):'';}).join('');
+    $('#eLbl').style.display=bs.length?'none':'';
+  }else{
+    html=DB.items.map(i=>labelHTML(null,i,true)).join('');
+    $('#eLbl').style.display=DB.items.length?'none':'';
+  }
+  $('#lGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
+  $('#lGrid').innerHTML=html;
+}
+
+function renderLog(){
+  const q=$('#qm').value.trim().toLowerCase();
+  const rows=DB.moves.filter(m=>!q||[m.code,m.bcode,m.type,m.note,m.user,(item(m.code)||{}).name||''].join(' ').toLowerCase().includes(q)).slice(0,500);
+  $('#tLog tbody').innerHTML=rows.map(m=>{
+    const t=m.type==='IN'?'in':m.type==='OUT'?'out':'adj';
+    const sign=m.type==='OUT'?'−':m.type==='IN'?'+':(m.qty>=0?'+':'−');
+    return `<tr><td class="code">${whenStr(m.ts)}</td>
+      <td class="code">${esc(m.bcode||m.code)}</td>
+      <td>${esc((item(m.code)||{}).name||m.code)}</td>
+      <td><span class="tag ${t}">${m.type}</span></td>
+      <td class="num">${sign}${fmt(Math.abs(m.qty))}</td>
+      <td>${esc(m.user||'—')}</td><td>${esc(m.note||'')}</td>
+      <td><button class="btn ghost sm" data-r="${esc(m.id)}">Reverse</button></td></tr>`;}).join('');
+  $('#eLog').style.display=DB.moves.length?'none':'';
+  $('#tLog').style.display=DB.moves.length?'':'none';
+  $$('#tLog [data-r]').forEach(b=>b.onclick=async()=>{
+    const m=DB.moves.find(x=>x.id===b.dataset.r); if(!m)return;
+    if(!confirm('Add a reversing entry for this movement? The original stays in the log.'))return;
+    await pushMove({id:uid(),ts:nowISO(),bcode:m.bcode,code:m.code,
+      type:m.type==='IN'?'OUT':m.type==='OUT'?'IN':'ADJ',
+      qty:m.type==='ADJ'?-m.qty:m.qty,note:'Reversal of '+m.id,user:DB.settings.user||'—'});
+    render();toast('Reversed');
+  });
+}
+
+function renderStatus(){
+  let txt,cls;
+  if(SB.on&&SB.ok){txt='Shared database';cls='';}
+  else if(SB.on){txt='Cloud not reachable';cls='bad';}
+  else if(localMode==='memory'){txt='Not saving';cls='bad';}
+  else {txt='This device only';cls='warn';}
+  $('#stTxt').textContent=txt; $('#stDot').className='dot '+cls;
+  $('#stCnt').textContent=DB.items.length+' items · '+DB.moves.length+' moves';
+  $('#beHint').textContent = SB.on ? (SB.ok?'Connected.':'Not connected — check the URL and key.') : 'Data stays in this browser.';
+}
+function render(){renderStock();renderItems();renderLabels();renderLog();renderCats();renderStatus();previewCode();}
+
+/* ---------- boot ---------- */
+(async function(){
+  await Local.init();
+  const s=await Local.load();
+  if(s&&Array.isArray(s.items)){
+    DB={items:s.items,batches:s.batches||[],moves:s.moves||[],seq:s.seq||s.items.length+1,
+        settings:Object.assign(DB.settings,s.settings||{})};
+  }
+  loadSettings();
+  document.body.classList.toggle('simple',!!+DB.settings.simple);
+  paintNav();
+  if(SB.on){ try{ await SB.pull(); persistLocal(); }catch(e){ toast('Cloud unreachable — using this device',true); } }
+  render();
+  if(!isTouch()) $('#scanInput').focus();
+})();
+</script>
+</body>
+</html>
