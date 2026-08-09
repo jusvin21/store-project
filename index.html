@@ -421,7 +421,9 @@ body.simple .modes,body.simple .bigrow{display:grid;grid-template-columns:1fr 1f
       <span class="sub">Raw material inventory</span>
     </div>
   </div>
-  <div class="link"><span class="dot" id="stDot"></span><span id="stTxt">…</span><br><span id="stCnt"></span></div>
+  <div class="link" data-tip="Which build is live|If this number does not match what you were told to upload, the phone is showing a cached copy.">
+  <span class="dot" id="stDot"></span><span id="stTxt">…</span><br>
+  <span id="stCnt"></span><br><span id="stBuild" style="opacity:.6;font-size:11px"></span></div>
 </header>
 <div class="brandrule" aria-hidden="true"></div>
 
@@ -737,6 +739,7 @@ body.simple .modes,body.simple .bigrow{display:grid;grid-template-columns:1fr 1f
 <section class="view" id="v-setup">
   <div class="card">
     <h2 class="sec">Where the data is kept</h2>
+    <p class="hint" style="margin:-6px 0 12px">Build <b id="stBuild2"></b> — check this matches the version you uploaded.</p>
     <div class="row" style="margin-bottom:10px">
       <select id="backend" class="txt">
         <option value="local">This device only</option>
@@ -950,6 +953,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
+const BUILD='2026-08-09.14';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -2207,6 +2211,13 @@ function buildRows(cells){
   }
   return h;
 }
+/* everything booked in today, newest first */
+function todaysBatches(){
+  const t=today();
+  const made={};
+  DB.moves.forEach(m=>{ if(m.type==='IN'&&m.bcode&&m.ts.slice(0,10)===t) made[m.bcode]=1; });
+  return DB.batches.filter(b=>made[b.bcode]);
+}
 function pendingToday(){
   const only=$('#dayNew')&&$('#dayNew').checked;
   return todaysBatches().filter(b=>!only||!b.printed);
@@ -2840,11 +2851,27 @@ function renderStatus(){
   else {txt='This device only';cls='warn';}
   $('#stTxt').textContent=txt; $('#stDot').className='dot '+cls;
   $('#stCnt').textContent=DB.items.length+' items · '+DB.moves.length+' moves';
+  const bt=document.getElementById('stBuild'); if(bt) bt.textContent='build '+BUILD;
+  const b2=document.getElementById('stBuild2'); if(b2) b2.textContent=BUILD;
   $('#beHint').textContent = SB.on ? (SB.ok?'Connected.':'Not connected — check the URL and key.') : 'Data stays in this browser.';
 }
 function render(){renderStock();renderItems();dPackShow();renderLabels();renderLog();renderCats();renderClear();renderStatus();previewCode();}
 
 /* ---------- boot ---------- */
+/* Startup self-check. A missing core function used to surface much later
+   as a confusing message on an unrelated button. */
+(function selfCheck(){
+  const need=['todaysBatches','pendingToday','scanPlan','checkMove','stockMaps','labelHTML','buildRows','qtyText'];
+  const bad=need.filter(n=>typeof window[n]!=='function');
+  if(bad.length){
+    document.addEventListener('DOMContentLoaded',()=>{
+      const t=document.getElementById('toast');
+      if(t){ t.textContent='Broken build ('+BUILD+') — missing: '+bad.join(', '); t.className='on bad'; }
+    });
+    console.error('Store Control: missing functions',bad);
+  }
+})();
+
 (async function(){
   await Local.init();
   const s=await Local.load();
