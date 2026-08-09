@@ -1211,24 +1211,39 @@ document.addEventListener('keydown',e=>{
 });
 
 let smTimer=null;
-function closeScanModal(){ clearTimeout(smTimer); $('#scanModal').classList.remove('on'); }
-$('#smBg').onclick=closeScanModal;
-$('#smClose').onclick=closeScanModal;
+function closeScanModal(){ clearTimeout(smTimer);
+  document.getElementById('scanModal').classList.remove('on');
+  document.getElementById('smBody').innerHTML=''; }
+document.getElementById('smBg').onclick=closeScanModal;
+document.getElementById('smClose').onclick=closeScanModal;
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeScanModal(); });
 
 /* Every scan result goes into a popup, so it is visible no matter where
    you are on the page. Choices stay until answered; finished actions
    clear themselves. */
+/* The popup owns the interactive copy. The panel in the page gets a
+   read-only echo with every control stripped out, so an id can never
+   exist twice and a dead duplicate can never be tapped. */
+function stripControls(html){
+  return String(html)
+    .replace(/<button[\s\S]*?<\/button>/g,'')
+    .replace(/<div class="pad">[\s\S]*?<\/div>/g,'')
+    .replace(/<div class="bigrow">[\s\S]*?<\/div>/g,'')
+    .replace(/<div class="row mt">\s*<\/div>/g,'');
+}
 function show(cls,html,quiet){
-  const r=$('#result'); r.className='result '+cls; r.innerHTML=html;
+  const r=document.getElementById('result');
+  r.className='result '+cls;
+  r.innerHTML = quiet ? html : stripControls(html);
   if(quiet){ closeScanModal(); return; }
-  const card=$('#smCard');
+  const card=document.getElementById('smCard');
   card.className='smcard '+cls;
-  $('#smBody').innerHTML=html;
-  $('#scanModal').classList.add('on');
+  document.getElementById('smBody').innerHTML=html;
+  document.getElementById('scanModal').classList.add('on');
   clearTimeout(smTimer);
-  const needsAnswer=/id="(sDirIn|sDirOut|sUPack|sUBase|sWhole|sPAll|sPPart|sOk|sKBack|qa)"/.test(html);
-  if(!needsAnswer) smTimer=setTimeout(closeScanModal, cls==='bad'?7000:4500);
+  /* anything with a control in it waits for the person, whatever it is */
+  const needsAnswer=/<button/.test(html);
+  if(!needsAnswer) smTimer=setTimeout(closeScanModal, cls==='bad'?9000:4500);
   if(!isTouch()) setTimeout(()=>$('#scanInput').focus(),30);
 }
 /* one line describing how an item is set up, shown wherever it helps */
@@ -2190,20 +2205,6 @@ function buildRows(cells){
     });
     h+='</div>';
   }
-  return h;
-}
-function skipCells(){ return ''; }
-
-/* everything booked in today, newest first */
-function todaysBatches(){
-  const t=today();
-  const made={};
-  DB.moves.forEach(m=>{ if(m.type==='IN'&&m.bcode&&m.ts.slice(0,10)===t) made[m.bcode]=1; });
-  return DB.batches.filter(b=>made[b.bcode]);
-}
-function labelsForBatches(list){
-  let h='';
-  list.forEach(b=>{const it=item(b.code); if(it) h+=labelHTML(b,it,false);});
   return h;
 }
 function pendingToday(){
