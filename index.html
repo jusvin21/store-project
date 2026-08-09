@@ -400,7 +400,7 @@ body.simple .modes,body.simple .bigrow{display:grid;grid-template-columns:1fr 1f
   body.sheet.outline .pcell{outline:0.2mm dashed #999;outline-offset:-0.2mm}
   .spacer{display:block}
   .prow{display:flex}
-  .wrap,#toast,#tip,#botNav,#sheet,#sheetBg{display:none!important}
+  .wrap,#toast,#tip,#botNav,#sheet,#sheetBg,#scanModal,.smbg,.smcard{display:none!important}
   #printArea{display:block!important;padding:4mm}
   .labelgrid{grid-template-columns:repeat(3,1fr);gap:3mm}
   .labelgrid.minigrid{grid-template-columns:repeat(4,25mm);gap:2mm;justify-content:start}
@@ -756,6 +756,8 @@ body.simple .modes,body.simple .bigrow{display:grid;grid-template-columns:1fr 1f
     </div>
     <div class="row mt">
       <button class="btn ghost" id="addCat" data-tip="Add a rule|Every new item in this category inherits these settings. You can still override any of them per item.">Add rule</button>
+      <button class="btn" id="applyCats"
+        data-tip="Fix existing items|Items created before a rule existed have no packing set, so they can only move single pieces. This copies the category rule onto them.">Apply rules to existing items</button>
     </div>
   </div>
 
@@ -926,7 +928,7 @@ let DB={items:[],batches:[],moves:[],seq:1,
             sheet:{cols:3,w:33,h:25,gx:0,gy:3,mt:0,ml:0,pw:100,ph:25,skip:0,share:'TSC',rot:0},
             cats:[
               {name:'Terminals',prefix:'TRM',unit:'pcs', pack:'roll',   packQty:3000,minPacks:2,whole:true, serial:true, col:'#9A4409'},
-              {name:'Couplers', prefix:'CPL',unit:'pcs', pack:'packet', packQty:100, minBase:500,serial:true, col:'#0E7490'},
+              {name:'Couplers', prefix:'CPL',unit:'pcs', pack:'packet', packQty:100, minBase:500,serial:true,whole:false, col:'#0E7490'},
               {name:'Sleeves',  prefix:'SLV',unit:'m',   pack:'roll',   packQty:100, minPacks:2, col:'#6D28D9'},
               {name:'Pipes',    prefix:'PIP',unit:'m',   pack:'roll',   packQty:100, minPacks:2, col:'#12652F'},
               {name:'Tapes',    prefix:'TAP',unit:'roll',pack:'carton', packQty:24,  minPacks:2, col:'#BE123C'}
@@ -1197,7 +1199,7 @@ function show(cls,html,quiet){
   $('#smBody').innerHTML=html;
   $('#scanModal').classList.add('on');
   clearTimeout(smTimer);
-  const needsAnswer=/id="(uPack|uBase|pkAll|pkPart|askIn|askOut|ok|pkOk|uOk|cOk)"/.test(html);
+  const needsAnswer=/id="(sDirIn|sDirOut|sUPack|sUBase|sWhole|sPAll|sPPart|sOk|sKBack|qa)"/.test(html);
   if(!needsAnswer) smTimer=setTimeout(closeScanModal, cls==='bad'?7000:4500);
   if(!isTouch()) setTimeout(()=>$('#scanInput').focus(),30);
 }
@@ -1273,6 +1275,19 @@ async function handleCode(raw){
 
   const onHand=byItem[it.code]||0;
   const avail = b ? (byBatch[b.bcode]||0) : onHand;
+
+  if(b && !hasPack(it)){
+    beep(false);
+    show('bad',`<span class="tag err">Packing not set up</span>
+      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+      <div class="rcd">${esc(code)}</div>
+      <div class="rcd" style="margin-top:8px">This code is a pack, but <b>${esc(it.name)}</b> is still set to
+        <b>loose</b> — nobody has said what it comes in or how many are inside. Until that is filled in it can
+        only move single ${esc(unitName(it,2))}.</div>
+      <div class="row mt"><button class="btn sm" id="qa">Fix this item</button></div>`);
+    $('#qa').onclick=()=>{closeScanModal();editItem(it.code);};
+    return;
+  }
 
   if(mode==='LOOK'){ beep(true); return renderLook(code,it,b,onHand,avail,byBatch); }
 
@@ -2219,6 +2234,35 @@ function renderCats(){
     $('#newPre').focus();
   });
 }
+/* Items created before their category rule existed have no packing, so
+   the scan can only offer loose pieces. This copies the rule onto them. */
+$('#applyCats').onclick=async()=>{
+  const targets=DB.items.filter(i=>{
+    const r=catRule(i.cat); if(!r)return false;
+    return !hasPack(i) || i.whole===undefined || i.serial===undefined;
+  });
+  if(!targets.length){toast('Every item already follows its category rule');return;}
+  const lines=targets.slice(0,8).map(i=>' · '+i.code+'  '+i.name).join('\n');
+  if(!confirm('Apply category rules to '+targets.length+' item'+(targets.length===1?'':'s')+'?\n\n'
+    +lines+(targets.length>8?'\n · …and '+(targets.length-8)+' more':'')
+    +'\n\nQuantities already recorded are not changed.'))return;
+  for(const i of targets){
+    const r=catRule(i.cat);
+    if(r.unit) i.unit=r.unit;
+    if(r.pack!==undefined) i.pack=r.pack||'';
+    if(r.packQty) i.packQty=r.packQty;
+    i.whole  = !!r.whole  && !!i.pack && packSize(i)>0;
+    i.serial = !!r.serial && !!i.pack && packSize(i)>0;
+    if(!i.min){
+      if(r.minPacks!=null) i.min=toBase(i,r.minPacks);
+      else if(r.minBase!=null) i.min=r.minBase;
+    }
+    await pushItem(i,false);
+  }
+  persistLocal(); render();
+  toast('Updated '+targets.length+' item'+(targets.length===1?'':'s'));
+};
+
 $('#addCat').onclick=()=>{
   const name=$('#newCat').value.trim();
   const pre=$('#newPre').value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,6);
@@ -2578,7 +2622,9 @@ function renderStock(){
     const soon=kids.filter(b=>{const d=dTo(b.exp);return d!==null&&d<=DB.settings.expDays;}).length;
     return `<tr class="${low?'low':''}">
       <td class="code">${esc(i.code)}</td>
-      <td>${catDot(i.cat)}${esc(i.name)}${low?' <span class="pill">Reorder</span>':''}${hasPack(i)?'<div class="rcd" style="font-size:11px;opacity:.6">'+esc(packText(i))+'</div>':''}</td>
+      <td>${catDot(i.cat)}${esc(i.name)}${low?' <span class="pill">Reorder</span>':''}${
+        (!hasPack(i)&&DB.batches.some(x=>x.code===i.code))
+          ? ' <span class="pill exp">Packing not set</span>' : ''}${hasPack(i)?'<div class="rcd" style="font-size:11px;opacity:.6">'+esc(packText(i))+'</div>':''}</td>
       <td class="num">${isWhole(i)
           ? (isSerial(i)
               ? fmt(openPacks(i.code))+' <span style="opacity:.6">'+esc(packName(i,openPacks(i.code)))+'</span>'
