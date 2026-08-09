@@ -350,22 +350,22 @@ body.simple .modes,body.simple #scanQty{display:none}
   background:var(--sc);border-radius:16px;padding:5px 13px}
 .lsel input{width:18px;height:18px;accent-color:var(--primary)}
 
-.label.mini{width:25mm;height:15mm;padding:0.7mm;display:flex;flex-direction:column;
+.label.mini{width:var(--lw,25mm);height:var(--lh,15mm);padding:0.7mm;display:flex;flex-direction:column;
   overflow:hidden;border:1px solid #000;background:#fff;color:#000;gap:0}
 .label.mini .mtop{display:flex;flex:1 1 auto;min-height:0;gap:0.7mm;align-items:flex-start}
-.label.mini .qr{flex:0 0 10.6mm;width:10.6mm;height:10.6mm}
-.label.mini .qr svg{width:10.6mm;height:10.6mm;display:block}
+.label.mini .qr{flex:0 0 var(--lq,10.6mm);width:var(--lq,10.6mm);height:var(--lq,10.6mm)}
+.label.mini .qr svg{width:var(--lq,10.6mm);height:var(--lq,10.6mm);display:block}
 .label.mini .side{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.25mm;overflow:hidden}
-.label.mini .lnm{font-family:var(--display);font-weight:700;font-size:1.85mm;line-height:1.1;
+.label.mini .lnm{font-family:var(--display);font-weight:700;font-size:var(--lfn,1.85mm);line-height:1.1;
   text-transform:uppercase;letter-spacing:-.01em;overflow:hidden;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-word}
-.label.mini .lmeta{font-family:var(--mono);font-size:1.25mm;line-height:1.15;color:#000;
+.label.mini .lmeta{font-family:var(--mono);font-size:var(--lfm,1.25mm);line-height:1.15;color:#000;
   text-transform:uppercase;overflow:hidden;margin:0;white-space:nowrap;text-overflow:clip}
 /* the code spans the full width, so a long name can never squeeze it */
-.label.mini .lcode{flex:0 0 auto;font-family:var(--mono);font-weight:700;font-size:2.1mm;
+.label.mini .lcode{flex:0 0 auto;font-family:var(--mono);font-weight:700;
   line-height:1.1;letter-spacing:.02em;text-align:left;white-space:nowrap;overflow:hidden;
-  border-top:0.15mm solid #000;padding-top:0.3mm;margin-top:0.3mm}
-.labelgrid.minigrid{grid-template-columns:repeat(auto-fill,minmax(25mm,25mm));gap:12px;align-items:start}
+  border-top:0.15mm solid #000;padding-top:0.3mm;margin-top:0.3mm;font-size:var(--lfc,2.1mm)}
+.labelgrid.minigrid{grid-template-columns:repeat(auto-fill,minmax(var(--lw,25mm),var(--lw,25mm)));gap:12px;align-items:start}
 .labelgrid.minigrid .lsel{font-size:11px;padding:3px 10px;margin-bottom:6px}
 .minihold{display:flex;flex-direction:column;align-items:flex-start}
 #printArea{display:none}
@@ -606,7 +606,13 @@ body.simple .modes,body.simple #scanQty{display:none}
           <option value="today">Booked in today</option>
           <option value="open">Still has stock</option>
         </select>
-        <select id="lblSize" class="txt"><option value="mini">25 × 15 mm — QR only</option><option value="big">Large — QR + barcode</option></select>
+        <select id="lblSize" class="txt"
+          data-tip="Label size|Picking a preset also sets the sheet layout underneath, so the two can never disagree.">
+          <option value="25x15">25 × 15 mm — 4 across</option>
+          <option value="33x25">33 × 25 mm — 3 across</option>
+          <option value="sheet">Use sheet layout below</option>
+          <option value="big">Large — QR + barcode</option>
+        </select>
         <button class="btn ghost sm" id="lAll">All</button><button class="btn ghost sm" id="lNone">None</button>
         <label class="lsel">Copies <input id="lCopies" type="number" min="1" max="200" value="1" class="txt" style="width:66px;font-family:var(--mono);text-align:right"></label>
       </div>
@@ -634,15 +640,15 @@ body.simple .modes,body.simple #scanQty{display:none}
       every label in a row before starting the next, so nothing is wasted. Use <b>Skip</b> to start part-way down a
       sheet you have already used.</p>
     <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(126px,1fr))">
-      <label class="f"><span>Labels across</span><input id="shCols" type="number" min="1" max="12" value="4"></label>
-      <label class="f"><span>Label width (mm)</span><input id="shW" type="number" step="0.5" value="22"></label>
-      <label class="f"><span>Label height (mm)</span><input id="shH" type="number" step="0.5" value="15"></label>
-      <label class="f"><span>Gap across (mm)</span><input id="shGx" type="number" step="0.5" value="3"></label>
+      <label class="f"><span>Labels across</span><input id="shCols" type="number" min="1" max="12" value="3"></label>
+      <label class="f"><span>Label width (mm)</span><input id="shW" type="number" step="0.5" value="33"></label>
+      <label class="f"><span>Label height (mm)</span><input id="shH" type="number" step="0.5" value="25"></label>
+      <label class="f"><span>Gap across (mm)</span><input id="shGx" type="number" step="0.5" value="0"></label>
       <label class="f"><span>Gap down (mm)</span><input id="shGy" type="number" step="0.5" value="3"></label>
       <label class="f"><span>Margin left (mm)</span><input id="shMl" type="number" step="0.5" value="0"></label>
       <label class="f"><span>Margin top (mm)</span><input id="shMt" type="number" step="0.5" value="0"></label>
       <label class="f"><span>Web / page width (mm)</span><input id="shPw" type="number" step="1" value="100"></label>
-      <label class="f"><span>Page height (mm)</span><input id="shPh" type="number" step="1" value="15"
+      <label class="f"><span>Page height (mm)</span><input id="shPh" type="number" step="1" value="25"
   data-tip="Page height|On a continuous roll set this to the label height, so one row of labels is one page. Only use a big number like 297 for A4 sheets of labels.">
   <span class="hint" id="phPrev"></span></label>
       <label class="f"><span>Rotate label</span><select id="shRot"
@@ -921,7 +927,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
-            sheet:{cols:4,w:22,h:15,gx:3,gy:3,mt:0,ml:0,pw:100,ph:15,skip:0,share:'TSC',rot:0},
+            sheet:{cols:3,w:33,h:25,gx:0,gy:3,mt:0,ml:0,pw:100,ph:25,skip:0,share:'TSC',rot:0},
             cats:[
               {name:'Terminals',prefix:'TRM',unit:'pcs', pack:'roll',   packQty:3000,minPacks:2,whole:true, serial:true, col:'#9A4409'},
               {name:'Couplers', prefix:'CPL',unit:'pcs', pack:'packet', packQty:100, minBase:500,serial:true, col:'#0E7490'},
@@ -1226,6 +1232,11 @@ async function handleCode(raw){
   if(b && isSerial(it) && (mode==='IN'||mode==='OUT')){
     beep(true); buzz(true); askPack(code,it,b,onHand,bHand,mode); return;
   }
+  /* Item code on a packed item: ask packs-or-pieces here and now,
+     rather than trusting a toggle set earlier. */
+  if(!b && hasPack(it) && (mode==='IN'||mode==='OUT')){
+    beep(true); buzz(true); askUnit(code,it,onHand,mode); return;
+  }
 
   const entered=Math.abs(numv($('#scanQty').value));
   const usePacks = hasPack(it) && (isWhole(it) || qtyMode==='pack');
@@ -1297,6 +1308,83 @@ async function handleCode(raw){
     <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}${b&&b.ven?' · '+esc(b.ven):''}</div>
     <div class="math"><span class="was">${fmt(onHand)}</span>
       <span class="now">${fmt(after)}</span>
+      <span class="un">${esc(qtyText(it,after))} left</span>${low?'<span class="pill">Reorder now</span>':''}</div>
+    ${undoBtn()}`);
+  wireUndo(); render();
+}
+
+/* ---------- packs or pieces, decided per scan ---------- */
+let UNITASK=null;
+function askUnit(code,it,onHand,dir){
+  UNITASK={code,it,onHand,dir};
+  const pn=packName(it,2), un=unitName(it,2);
+  if(isWhole(it)){ askUnitQty(true); return; }
+  show('info',`<span class="tag look">${esc(dir==='IN'?'Receiving':'Issuing')}</span>
+    <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+    <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}</div>
+    <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))} in store</span></div>
+    ${packText(it)?`<div class="rcd">${esc(packText(it))}</div>`:''}
+    <div class="bigrow">
+      <button class="big ${dir==='IN'?'in':'out'}" id="uPack">Whole ${esc(pn)}<small>${fmt(packSize(it))} ${esc(un)} each</small></button>
+      <button class="big grey" id="uBase">Loose ${esc(un)}<small>type the number</small></button>
+    </div>
+    <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="uCancel">Cancel</button>`);
+  $('#uPack').onclick=()=>askUnitQty(true);
+  $('#uBase').onclick=()=>askUnitQty(false);
+  $('#uCancel').onclick=()=>{UNITASK=null;show('','<p class="idle">Ready. Scan the next label.</p>');};
+}
+function askUnitQty(inPacks){
+  if(!UNITASK)return;
+  const {it,onHand,dir,code}=UNITASK; let buf='';
+  const draw=()=>{
+    const v=buf===''?'0':buf, n=parseFloat(v)||0;
+    const base=inPacks?n*packSize(it):n;
+    const word=inPacks?packName(it,n):unitName(it,n);
+    const over=dir==='OUT'&&base>onHand;
+    show(over?'bad':(dir==='IN'?'ok':'info'),
+      `<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Receive':'Issue'} ${esc(inPacks?packName(it,2):unitName(it,2))}</span>
+       <div class="rnm" style="margin-top:5px">${esc(it.name)}</div>
+       <div class="rcd">${esc(code)} · ${esc(qtyText(it,onHand))} now</div>
+       <div class="qtybox">${esc(v)} <span style="font-size:15px;opacity:.6">${esc(word)}</span></div>
+       <div class="rcd" style="text-align:right;margin-top:6px">${over
+          ? 'Only '+fmt(onHand)+' '+unitName(it,onHand)+' in store'
+          : (inPacks&&n>0?'= '+fmt(base)+' '+unitName(it,base):'&nbsp;')}</div>
+       <div class="pad">
+         ${[1,2,3,4,5,6,7,8,9].map(k=>`<button data-k="${k}">${k}</button>`).join('')}
+         <button data-k=".">.</button><button data-k="0">0</button><button data-k="del">&#9003;</button>
+       </div>
+       <button class="confirm ${dir==='IN'?'in':'out'}" id="uOk" ${over||n<=0?'disabled':''}>${dir==='IN'?'Add':'Take'} ${esc(v)} ${esc(word)}</button>
+       <button class="big grey" style="width:100%;margin-top:8px;font-size:13px;padding:11px" id="uBack">Back</button>`);
+    $$('.pad button').forEach(bt=>bt.onclick=()=>{
+      const k=bt.dataset.k;
+      if(k==='del')buf=buf.slice(0,-1);
+      else if(k==='.'){ if(!inPacks&&!buf.includes('.'))buf=(buf||'0')+'.'; }
+      else buf=(buf==='0'?'':buf)+k;
+      if(buf.length>9)buf=buf.slice(0,9);
+      draw();
+    });
+    const ok=$('#uOk'); if(ok&&!ok.disabled) ok.onclick=()=>commitUnit(base,inPacks?n:null);
+    $('#uBack').onclick=()=>{ if(isWhole(it)){UNITASK=null;show('','<p class="idle">Ready. Scan the next label.</p>');}
+      else askUnit(code,it,onHand,dir); };
+  };
+  draw();
+}
+async function commitUnit(qty,packsTyped){
+  if(!UNITASK)return;
+  const {code,it,onHand,dir}=UNITASK;
+  if(!qty||qty<=0){beep(false);toast('Enter a number first',true);return;}
+  if(dir==='OUT'&&qty>onHand){beep(false);toast('Only '+fmt(onHand)+' '+unitName(it,onHand)+' in store',true);return;}
+  const said = packsTyped!=null
+    ? fmt(packsTyped)+' '+packName(it,packsTyped)+' ('+fmt(qty)+' '+unitName(it,qty)+')'
+    : fmt(qty)+' '+unitName(it,qty);
+  const mv={id:uid(),ts:nowISO(),bcode:'',code:it.code,type:dir,qty:qty,note:'',user:DB.settings.user||'—'};
+  await pushMove(mv); lastMove=mv; UNITASK=null;
+  const after=dir==='IN'?onHand+qty:onHand-qty;
+  const low=it.min>0&&after<=it.min;
+  beep(true); buzz(true);
+  show('ok',`<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Received':'Issued'} ${esc(said)}</span>
+    <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
+    <div class="math"><span class="was">${fmt(onHand)}</span><span class="now">${fmt(after)}</span>
       <span class="un">${esc(qtyText(it,after))} left</span>${low?'<span class="pill">Reorder now</span>':''}</div>
     ${undoBtn()}`);
   wireUndo(); render();
@@ -1870,7 +1958,27 @@ $('#saveDel').onclick=async()=>{
 };
 
 /* ---------- labels ---------- */
-function labelStyle(){const el=$('#lblSize');return el?el.value:'mini';}
+const LBL_PRESETS={
+  '25x15':{w:25,h:15,cols:4,gx:0,gy:3,pw:100},
+  '33x25':{w:33,h:25,cols:3,gx:0,gy:3,pw:100}
+};
+function labelStyle(){const el=$('#lblSize');const v=el?el.value:'25x15';return v==='big'?'big':'mini';}
+/* One place decides label geometry: the sheet layout. The CSS reads it,
+   so the preview, the print and the sheet can never drift apart. */
+function applyLabelVars(){
+  const s=sheet();
+  const w=+s.w||25, h=+s.h||15;
+  const q=Math.min(h-3.4, w*0.44);                 /* QR square */
+  const scale=Math.min(w/25,h/15);
+  const set=(el)=>{ if(!el)return;
+    el.style.setProperty('--lw',w+'mm'); el.style.setProperty('--lh',h+'mm');
+    el.style.setProperty('--lq',Math.max(6,q).toFixed(2)+'mm');
+    el.style.setProperty('--lfn',(1.85*Math.min(scale,1.9)).toFixed(2)+'mm');
+    el.style.setProperty('--lfm',(1.25*Math.min(scale,1.9)).toFixed(2)+'mm');
+    el.style.setProperty('--lfc',(2.10*Math.min(scale,1.9)).toFixed(2)+'mm');
+  };
+  set($('#lGrid')); set($('#printGrid')); set($('#delLabel'));
+}
 
 /* 25 x 15 mm, QR only. Everything is sized in mm so what prints is
    the real thing, not a scaled screenshot. */
@@ -1922,7 +2030,7 @@ $('#lblTarget').onchange=()=>{ if($('#lblTarget').value==='roll') $('#lblSize').
 /* @page cannot be switched with a class, so the rule is rewritten
    just before the print dialog opens. */
 function sheet(){
-  const d={cols:4,w:22,h:15,gx:3,gy:3,mt:0,ml:0,pw:100,ph:15,skip:0,share:'TSC',rot:0};
+  const d={cols:3,w:33,h:25,gx:0,gy:3,mt:0,ml:0,pw:100,ph:25,skip:0,share:'TSC',rot:0};
   const s=DB.settings.sheet||(DB.settings.sheet=Object.assign({},d));
   /* fill gaps left by layouts saved under an older version */
   for(const k in d) if(s[k]===undefined||s[k]===null||s[k]==='undefined') s[k]=d[k];
@@ -1933,7 +2041,7 @@ function loadSheet(){
   [['shCols','cols'],['shW','w'],['shH','h'],['shGx','gx'],['shGy','gy'],
    ['shMl','ml'],['shMt','mt'],['shPw','pw'],['shPh','ph'],['shSkip','skip'],['shShare','share'],['shRot','rot']]
    .forEach(([id,k])=>{ if($('#'+id)) $('#'+id).value=s[k]; });
-  sheetPrev();
+  sheetPrev(); applyLabelVars();
 }
 function sheetPrev(){
   const s=sheet();
@@ -1971,7 +2079,7 @@ if($('#shAuto')) $('#shAuto').onclick=()=>{
   s.pw=w; $('#shPw').value=w; persistLocal(); sheetPrev();
   toast(w>104 ? 'Web set to '+w+' mm — wider than a 4 inch printhead (104 mm)' : 'Web width set to '+w+' mm');
 };
-if($('#shSave')) $('#shSave').onclick=()=>{ readSheet(); persistLocal(); sheetPrev(); toast('Sheet layout saved'); };
+if($('#shSave')) $('#shSave').onclick=()=>{ readSheet(); persistLocal(); sheetPrev(); applyLabelVars(); renderLabels(); toast('Sheet layout saved'); };
 if($('#shTest')) $('#shTest').onclick=()=>{
   const s=readSheet(); persistLocal();
   const cells=[];
@@ -2071,6 +2179,7 @@ function printCells(cells){
   $('#printGrid').innerHTML = roll
     ? cells.map(c=>'<div class="minihold">'+c+'</div>').join('')
     : buildRows(cells);
+  applyLabelVars();
   applyPageRule();
   window.print();
 }
@@ -2084,7 +2193,11 @@ $('#dayCsv').onclick=()=>{
   markPrinted(list);
   toast('Saved labels.csv — '+rows.length+' label'+(rows.length===1?'':'s'));
 };
-$('#lblSize').onchange=()=>{renderLabels();
+$('#lblSize').onchange=()=>{
+  const pre=LBL_PRESETS[$('#lblSize').value];
+  if(pre){ Object.assign(sheet(),pre); persistLocal(); loadSheet(); }
+  applyLabelVars();
+  renderLabels();
   if($('#delPrev').style.display!=='none'){const el=$('#delLabel');if(el&&el.dataset.bc){
     const b=batch(el.dataset.bc);if(b){el.className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
       el.innerHTML=labelHTML(b,item(b.code),false);}}}};
@@ -2605,6 +2718,7 @@ function renderLabels(){
   }
   $('#lGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
   $('#lGrid').innerHTML=html;
+  applyLabelVars();
 }
 
 function renderLog(){
