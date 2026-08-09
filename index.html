@@ -565,6 +565,34 @@ body.simple .modes,body.simple .bigrow{display:grid;grid-template-columns:1fr 1f
       <label class="f"><span>Rate per unit</span><input id="dRate" type="number" inputmode="decimal" step="any" value="0"></label>
       <label class="f"><span>Labels to print</span><input id="dLbl" type="number" min="0" max="200" value="6"></label>
     </div>
+    <div id="dPackBox" style="margin-top:16px;padding:14px 16px;border-radius:12px;background:var(--sc)">
+      <div class="row spread" style="gap:10px">
+        <div><b style="font-size:13.5px">Packing</b>
+          <div class="hint" id="dPackNow" style="margin-top:2px">—</div></div>
+        <button class="btn ghost sm" id="dPackEdit">Change</button>
+      </div>
+      <div id="dPackFields" style="display:none;margin-top:14px">
+        <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
+          <label class="f"><span>Comes in</span><select id="dPackType">
+            <option value="">Loose — no pack</option>
+            <option>roll</option><option>packet</option><option>carton</option>
+            <option>box</option><option>bag</option><option>bundle</option><option>coil</option><option>set</option>
+          </select></label>
+          <label class="f"><span id="dPackPerLbl">Per pack (usual)</span>
+            <input id="dPackPer" type="number" inputmode="decimal" step="any" value="0"></label>
+          <label class="f"><span>Issued as</span><select id="dPackWhole">
+            <option value="0">Any quantity</option><option value="1">Whole packs only</option></select></label>
+          <label class="f"><span>Each pack tracked?</span><select id="dPackSerial">
+            <option value="0">No — one code for the item</option><option value="1">Yes — a code per pack</option></select></label>
+        </div>
+        <div class="row mt">
+          <button class="btn blue sm" id="dPackSave">Save packing</button>
+          <button class="btn ghost sm" id="dPackCancel">Cancel</button>
+          <span class="hint" id="dPackHint"></span>
+        </div>
+      </div>
+    </div>
+
     <div class="row mt">
       <button class="btn blue" id="saveDel" data-tip="Book in the delivery|Creates a batch, logs the quantity, and builds the label in one step.">Book in &amp; make label</button>
       <span class="hint" id="delHint"></span>
@@ -1285,7 +1313,8 @@ async function handleCode(raw){
         <b>loose</b> — nobody has said what it comes in or how many are inside. Until that is filled in it can
         only move single ${esc(unitName(it,2))}.</div>
       <div class="row mt"><button class="btn sm" id="qa">Fix this item</button></div>`);
-    $('#qa').onclick=()=>{closeScanModal();editItem(it.code);};
+    $('#qa').onclick=()=>{ closeScanModal(); go('recv');
+      $('#dItem').value=it.code; dPackShow(); dPackOpen(); delUnits(); };
     return;
   }
 
@@ -1841,6 +1870,49 @@ function editItem(code){const it=item(code);if(!it)return;editing=it.code;
   go('items');$('#fName').focus();}
 
 /* ---------- new delivery ---------- */
+/* Packing can be set from here, because this is where you first find out
+   it is missing — not on a screen you visited days ago. */
+function dPackShow(){
+  const it=item($('#dItem').value);
+  const box=$('#dPackBox');
+  if(!it){ box.style.display='none'; return; }
+  box.style.display='';
+  const set=hasPack(it);
+  $('#dPackNow').innerHTML = set
+    ? esc(setupLine(it))
+    : '<b style="color:var(--error)">Not set — this item can only move single '+esc(unitName(it,2))+'</b>';
+  box.style.background = set ? 'var(--sc)' : 'var(--error-container)';
+  $('#dPackEdit').textContent = set ? 'Change' : 'Set it now';
+}
+function dPackOpen(){
+  const it=item($('#dItem').value); if(!it)return;
+  const r=catRule(it.cat)||{};
+  $('#dPackType').value   = it.pack || r.pack || '';
+  $('#dPackPer').value    = packSize(it) || r.packQty || 0;
+  $('#dPackWhole').value  = (it.whole!==undefined?it.whole:!!r.whole)?'1':'0';
+  $('#dPackSerial').value = (it.serial!==undefined?it.serial:!!r.serial)?'1':'0';
+  $('#dPackPerLbl').textContent=($('#dPackType').value?((it.unit||'pcs')+' per '+$('#dPackType').value):'Per pack (usual)');
+  $('#dPackFields').style.display='';
+  $('#dPackHint').textContent = catRule(it.cat)
+    ? 'Prefilled from the '+it.cat+' rule' : 'This item has no category rule yet';
+}
+$('#dPackEdit').onclick=()=>{ $('#dPackFields').style.display==='none'?dPackOpen():$('#dPackFields').style.display='none'; };
+$('#dPackCancel').onclick=()=>{ $('#dPackFields').style.display='none'; };
+$('#dPackType').onchange=()=>{ const it=item($('#dItem').value);
+  $('#dPackPerLbl').textContent=($('#dPackType').value?((it&&it.unit||'pcs')+' per '+$('#dPackType').value):'Per pack (usual)'); };
+$('#dPackSave').onclick=async()=>{
+  const it=item($('#dItem').value); if(!it)return;
+  const pk=$('#dPackType').value, per=numv($('#dPackPer').value);
+  if(pk&&per<=0){toast('Say how many are in one '+pk,true);$('#dPackPer').focus();return;}
+  it.pack=pk; it.packQty=pk?per:0;
+  it.whole  = !!pk && per>0 && $('#dPackWhole').value==='1';
+  it.serial = !!pk && per>0 && $('#dPackSerial').value==='1';
+  await pushItem(it,false); persistLocal();
+  $('#dPackFields').style.display='none';
+  dPackShow(); delUnits(); delPrev(); renderLabels(); render();
+  toast('Packing saved — '+setupLine(it));
+};
+
 function delUnits(){
   const it=item($('#dItem').value); const sel=$('#dUnit');
   if(!it){sel.innerHTML='';$('#dPerHint').textContent='';return;}
@@ -1869,7 +1941,8 @@ function delPrev(){
   $('#dLbl').value = ($('#dUnit').value==='pack'&&n>0) ? Math.min(200,Math.ceil(n)) : $('#dLbl').value;
 }
 $('#dItem').onchange=()=>{const it=item($('#dItem').value);
-  if(it&&!numv($('#dRate').value))$('#dRate').value=it.rate; delUnits();};
+  if(it&&!numv($('#dRate').value))$('#dRate').value=it.rate;
+  $('#dPackFields').style.display='none'; dPackShow(); delUnits();};
 $('#dQty').addEventListener('input',delPrev);
 $('#dPer').addEventListener('input',delPrev);
 $('#dUnit').addEventListener('change',delPrev);
@@ -1882,6 +1955,17 @@ $('#saveDel').onclick=async()=>{
   const q=inPacks?typed*per:typed;
   if(!it){toast('Pick an item',true);return;}
   if(q<=0){toast('Enter the quantity received',true);$('#dQty').focus();return;}
+  if(!hasPack(it)){
+    const r=catRule(it.cat);
+    if(r&&r.pack){
+      toast('Set the packing first — '+it.cat+' normally come in '+r.pack+'s',true);
+      dPackShow(); dPackOpen(); $('#dPackBox').scrollIntoView({behavior:'smooth',block:'center'});
+      return;
+    }
+    if(!confirm(it.name+' has no packing set, so it will be booked in as loose '+unitName(it,2)+'.\n\nContinue?')){
+      dPackShow(); dPackOpen(); return;
+    }
+  }
   if(isWhole(it)&&typed%1!==0){toast(it.name+' comes in whole '+packName(it,2)+' — enter a whole number',true);$('#dQty').focus();return;}
   const d=$('#dDate').value||today();
   const meta={ven:$('#dVen').value.trim(),lot:$('#dLot').value.trim(),
@@ -2677,7 +2761,7 @@ function renderItems(){
   const opts=DB.items.slice().sort((a,b)=>a.name.localeCompare(b.name))
     .map(i=>`<option value="${esc(i.code)}">${esc(i.name)} — ${esc(i.code)}</option>`).join('');
   const cur=$('#dItem').value; $('#dItem').innerHTML=opts; if(cur)$('#dItem').value=cur;
-  delUnits();
+  dPackShow(); delUnits();
   const allCats=[...new Set(cats().map(c=>c.name).concat(DB.items.map(i=>i.cat).filter(Boolean)))];
   $('#catL').innerHTML=allCats.map(c=>`<option>${esc(c)}</option>`).join('');
   $('#venL').innerHTML=[...new Set(DB.batches.map(b=>b.ven).filter(Boolean))].map(c=>`<option>${esc(c)}</option>`).join('');
@@ -2757,7 +2841,7 @@ function renderStatus(){
   $('#stCnt').textContent=DB.items.length+' items · '+DB.moves.length+' moves';
   $('#beHint').textContent = SB.on ? (SB.ok?'Connected.':'Not connected — check the URL and key.') : 'Data stays in this browser.';
 }
-function render(){renderStock();renderItems();renderLabels();renderLog();renderCats();renderClear();renderStatus();previewCode();}
+function render(){renderStock();renderItems();dPackShow();renderLabels();renderLog();renderCats();renderClear();renderStatus();previewCode();}
 
 /* ---------- boot ---------- */
 (async function(){
