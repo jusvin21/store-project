@@ -396,12 +396,17 @@ body.simple .modes,body.simple #scanQty{display:none}
   body.roll .label,body.roll .label.mini{border:0!important;margin:0!important}
   body.roll.outline .label.mini{border:0.2mm dashed #000!important}
   /* multi-across die-cut sheet — geometry comes from Sheet layout */
-  body.sheet #printArea{padding:0!important}
-  body.sheet .labelgrid,body.sheet .labelgrid.minigrid{display:grid!important;justify-content:start;align-content:start}
-  body.sheet .minihold{display:block;break-inside:avoid;page-break-inside:avoid}
-  body.sheet .label,body.sheet .label.mini{border:0!important;margin:0!important}
-  body.sheet.outline .label.mini,body.sheet .spacer{border:0.2mm dashed #999!important}
+  /* one row of labels = one page. Nothing is left to the browser. */
+  body.sheet #printArea{padding:0!important;margin:0!important}
+  body.sheet .labelgrid,body.sheet .labelgrid.minigrid{display:block!important;gap:0!important}
+  body.sheet .prow{display:flex!important;align-items:flex-start;overflow:hidden;
+    page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid}
+  body.sheet .prow:last-child{page-break-after:auto;break-after:auto}
+  body.sheet .pcell{overflow:hidden;flex:0 0 auto}
+  body.sheet .label,body.sheet .label.mini{border:0!important;margin:0!important;width:100%!important;height:100%!important}
+  body.sheet.outline .pcell{outline:0.2mm dashed #999;outline-offset:-0.2mm}
   .spacer{display:block}
+  .prow{display:flex}
   .wrap,#toast,#tip,#botNav,#sheet,#sheetBg{display:none!important}
   #printArea{display:block!important;padding:4mm}
   .labelgrid{grid-template-columns:repeat(3,1fr);gap:3mm}
@@ -629,11 +634,20 @@ body.simple .modes,body.simple #scanQty{display:none}
       <label class="f"><span>Margin left (mm)</span><input id="shMl" type="number" step="0.5" value="0"></label>
       <label class="f"><span>Margin top (mm)</span><input id="shMt" type="number" step="0.5" value="0"></label>
       <label class="f"><span>Web / page width (mm)</span><input id="shPw" type="number" step="1" value="100"></label>
-      <label class="f"><span>Page height (mm)</span><input id="shPh" type="number" step="1" value="297"></label>
+      <label class="f"><span>Row height = label height (mm)</span><input id="shPh" type="number" step="1" value="15"></label>
+      <label class="f"><span>Rotate label</span><select id="shRot"
+        data-tip="Turn the printed content|Use this if the text comes out sideways on the sticker. 90 is the usual fix.">
+        <option value="0">None</option><option value="90">90&deg;</option>
+        <option value="180">180&deg;</option><option value="270">270&deg;</option></select></label>
+      <label class="f"><span>Printer share name</span><input id="shShare" placeholder="TSC"
+        data-tip="Windows share name|Right-click the printer, Printer properties, Sharing tab, tick Share and give it a short name with no spaces.">
+        <span class="hint" id="sharePrev"></span></label>
       <label class="f"><span>Skip first N labels</span><input id="shSkip" type="number" min="0" value="0"
         data-tip="Part-used sheet|If the first 6 stickers are gone, put 6 here and printing starts at position 7."></label>
     </div>
     <div class="row mt">
+      <button class="btn ghost" id="shBat"
+        data-tip="One-click sender|Downloads print.bat. Keep it in your Downloads folder; double-click it and it sends the newest labels file straight to the printer.">Download print.bat</button>
       <button class="btn ghost" id="shTspl"
         data-tip="TSPL for the ticked labels|Same as the daily button, but for whatever you have ticked above.">Export ticked as TSPL</button>
       <button class="btn ghost" id="shAuto"
@@ -897,7 +911,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
-            sheet:{cols:4,w:22,h:15,gx:3,gy:3,mt:0,ml:0,pw:100,ph:297,skip:0},
+            sheet:{cols:4,w:22,h:15,gx:3,gy:3,mt:0,ml:0,pw:100,ph:15,skip:0,share:'TSC',rot:0},
             cats:[
               {name:'Terminals',prefix:'TRM',unit:'pcs', pack:'roll',   packQty:3000,minPacks:2,whole:true, col:'#9A4409'},
               {name:'Couplers', prefix:'CPL',unit:'pcs', pack:'packet', packQty:100, minBase:500,serial:true, col:'#0E7490'},
@@ -1785,11 +1799,10 @@ $('#saveDel').onclick=async()=>{
   $('#delLabel').dataset.bc=b.bcode;
   $('#delLabel').innerHTML=made.map(x=>labelHTML(x,it,false)).join('');
   $('#delPrint').onclick=()=>{
-    let h='';
-    if(made.length>1) h=made.map(x=>labelHTML(x,it,false)).join('');
-    else for(let i=0;i<Math.max(1,copies);i++)h+=labelHTML(b,it,false);
-    $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
-    $('#printGrid').innerHTML=skipCells()+h;applyPageRule();window.print();};
+    const cells=[];
+    if(made.length>1) made.forEach(x=>cells.push(labelHTML(x,it,false)));
+    else for(let i=0;i<Math.max(1,copies);i++)cells.push(labelHTML(b,it,false));
+    printCells(cells);};
   $('#delHint').textContent = made.length>1
     ? (made.length+' '+packName(it,made.length)+' booked in — '+made[0].bcode+' to '+made[made.length-1].bcode+'. Each needs its own label.')
     : ('Batch '+b.bcode+' booked in.');
@@ -1846,7 +1859,7 @@ function sheet(){ return DB.settings.sheet||(DB.settings.sheet={cols:4,w:25,h:15
 function loadSheet(){
   const s=sheet();
   [['shCols','cols'],['shW','w'],['shH','h'],['shGx','gx'],['shGy','gy'],
-   ['shMl','ml'],['shMt','mt'],['shPw','pw'],['shPh','ph'],['shSkip','skip']]
+   ['shMl','ml'],['shMt','mt'],['shPw','pw'],['shPh','ph'],['shSkip','skip'],['shShare','share'],['shRot','rot']]
    .forEach(([id,k])=>{ if($('#'+id)) $('#'+id).value=s[k]; });
   sheetPrev();
 }
@@ -1861,7 +1874,7 @@ function sheetPrev(){
     : (perRow+' across x '+rows+' down = '+(perRow*rows)+' labels'
        +(s.pw>104?' <b style="color:var(--warn)">— page is '+s.pw+' mm, a 4 inch printhead covers 104 mm</b>':''));
 }
-['shCols','shW','shH','shGx','shGy','shMl','shMt','shPw','shPh','shSkip'].forEach(id=>{
+['shCols','shW','shH','shGx','shGy','shMl','shMt','shPw','shPh','shSkip','shShare','shRot'].forEach(id=>{
   const el=$('#'+id); if(el) el.addEventListener('input',()=>{ readSheet(); sheetPrev(); });
 });
 function readSheet(){
@@ -1872,6 +1885,9 @@ function readSheet(){
   s.ml=numv($('#shMl').value); s.mt=numv($('#shMt').value);
   s.pw=numv($('#shPw').value)||210; s.ph=numv($('#shPh').value)||297;
   s.skip=Math.max(0,parseInt($('#shSkip').value)||0);
+  s.rot=parseInt($('#shRot').value)||0;
+  s.share=($('#shShare').value||'TSC').trim().replace(/[^A-Za-z0-9_-]/g,'')||'TSC';
+  if($('#sharePrev')) $('#sharePrev').textContent='\\\\localhost\\'+s.share;
   return s;
 }
 if($('#shAuto')) $('#shAuto').onclick=()=>{
@@ -1882,13 +1898,15 @@ if($('#shAuto')) $('#shAuto').onclick=()=>{
 };
 if($('#shSave')) $('#shSave').onclick=()=>{ readSheet(); persistLocal(); sheetPrev(); toast('Sheet layout saved'); };
 if($('#shTest')) $('#shTest').onclick=()=>{
-  const s=readSheet();
-  const rows=Math.max(1,Math.floor((s.ph-s.mt+s.gy)/(s.h+s.gy)));
-  let h='';
-  for(let i=0;i<s.cols*rows;i++)
-    h+='<div class="minihold"><div class="label mini spacer" style="display:flex;align-items:center;justify-content:center;font-size:2.2mm">'+(i+1)+'</div></div>';
-  $('#printGrid').innerHTML=h;
-  applyPageRule(true); window.print();
+  const s=readSheet(); persistLocal();
+  const cells=[];
+  for(let i=0;i<s.cols*2;i++)
+    cells.push('<div class="label mini" style="display:flex;align-items:center;justify-content:center;'
+      +'font-family:var(--mono);font-size:3mm;border:0.2mm solid #000">'+(i+1)+'</div>');
+  const keep=$('#lblTarget')?$('#lblTarget').value:'sheet';
+  if($('#lblTarget')) $('#lblTarget').value='sheet';
+  printCells(cells);
+  if($('#lblTarget')) $('#lblTarget').value=keep;
 };
 
 function applyPageRule(forceSheet){
@@ -1897,14 +1915,7 @@ function applyPageRule(forceSheet){
   let el=document.getElementById('pageRule');
   if(!el){el=document.createElement('style');el.id='pageRule';document.head.appendChild(el);}
   if(mode==='sheet'){
-    el.textContent =
-      '@page{size:'+s.pw+'mm '+s.ph+'mm;margin:0}'
-      +'@media print{'
-      +'#printArea{padding:'+s.mt+'mm 0 0 '+s.ml+'mm!important}'
-      +'.labelgrid,.labelgrid.minigrid{grid-template-columns:repeat('+s.cols+','+s.w+'mm)!important;'
-      +'column-gap:'+s.gx+'mm!important;row-gap:'+s.gy+'mm!important}'
-      +'.label.mini,.spacer{width:'+s.w+'mm!important;height:'+s.h+'mm!important}'
-      +'}';
+    el.textContent='@page{size:'+s.pw+'mm '+(s.ph||s.h)+'mm;margin:0}';
   }else{
     el.textContent='@page{size:'+s.w+'mm '+s.h+'mm;margin:0}';
   }
@@ -1912,12 +1923,39 @@ function applyPageRule(forceSheet){
   document.body.classList.toggle('sheet',mode==='sheet');
   document.body.classList.toggle('outline',!!($('#lblOutline')&&$('#lblOutline').checked));
 }
-/* blank positions so a part-used sheet is not wasted */
-function skipCells(){
-  const n=sheet().skip||0; let h='';
-  for(let i=0;i<n;i++) h+='<div class="minihold"><div class="label mini spacer"></div></div>';
+/* Build the print job as explicit rows: N cells across, one row per
+   page. Blank cells pad a part-used sheet and the final short row. */
+function buildRows(cells){
+  const s=sheet(), cols=Math.max(1,+s.cols);
+  const pad=[];
+  for(let i=0;i<(s.skip||0);i++) pad.push('');
+  const all=pad.concat(cells);
+  let h='';
+  for(let i=0;i<all.length;i+=cols){
+    const row=all.slice(i,i+cols);
+    while(row.length<cols) row.push('');
+    h+='<div class="prow" style="width:'+s.pw+'mm;height:'+s.h+'mm;padding-left:'+(s.ml||0)+'mm">';
+    row.forEach((inner,k)=>{
+      const rot=(+s.rot||0)%360;
+      let body=inner||'';
+      if(body&&rot){
+        /* rotate about the top-left corner, then slide back into the cell.
+           At 90 and 270 the wrapper's width and height swap. */
+        const swap = (rot===90||rot===270);
+        const ww = swap ? s.h : s.w, wh = swap ? s.w : s.h;
+        const tr = rot===90  ? 'translateX('+s.w+'mm) rotate(90deg)'
+                 : rot===180 ? 'translate('+s.w+'mm,'+s.h+'mm) rotate(180deg)'
+                 :             'translateY('+s.h+'mm) rotate(270deg)';
+        body='<div style="width:'+ww+'mm;height:'+wh+'mm;transform-origin:0 0;transform:'+tr+'">'+body+'</div>';
+      }
+      h+='<div class="pcell" style="width:'+s.w+'mm;height:'+s.h+'mm;'
+        +(k<cols-1?'margin-right:'+s.gx+'mm;':'')+'">'+body+'</div>';
+    });
+    h+='</div>';
+  }
   return h;
 }
+function skipCells(){ return ''; }
 
 /* everything booked in today, newest first */
 function todaysBatches(){
@@ -1934,10 +1972,21 @@ function labelsForBatches(list){
 $('#dayPrint').onclick=()=>{
   const list=todaysBatches();
   if(!list.length){toast('Nothing was booked in today',true);return;}
-  $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
-  $('#printGrid').innerHTML=skipCells()+labelsForBatches(list);
-  applyPageRule();window.print();
+  const cells=[];
+  list.forEach(b=>{const it=item(b.code); if(it) cells.push(labelHTML(b,it,false));});
+  printCells(cells);
 };
+
+/* single entry point for every print job */
+function printCells(cells){
+  const roll = $('#lblTarget') && $('#lblTarget').value==='roll';
+  $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
+  $('#printGrid').innerHTML = roll
+    ? cells.map(c=>'<div class="minihold">'+c+'</div>').join('')
+    : buildRows(cells);
+  applyPageRule();
+  window.print();
+}
 $('#dayCsv').onclick=()=>{
   const list=todaysBatches();
   if(!list.length){toast('Nothing was booked in today',true);return;}
@@ -1957,11 +2006,10 @@ $('#lPrint').onclick=()=>{
   const picked=$$('.lchk').filter(c=>c.checked).map(c=>c.value);
   if(!picked.length){toast('Tick at least one label',true);return;}
   const n=Math.max(1,Math.min(200,parseInt($('#lCopies').value)||1));
-  let h='';
+  const cells=[];
   picked.forEach(code=>{const b=batch(code),it=b?item(b.code):item(code);
-    if(it)for(let i=0;i<n;i++)h+=labelHTML(b,it,false);});
-  $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
-  $('#printGrid').innerHTML=skipCells()+h;applyPageRule();window.print();
+    if(it)for(let i=0;i<n;i++)cells.push(labelHTML(b,it,false));});
+  printCells(cells);
 };
 
 /* ---------- category rules ---------- */
@@ -2172,6 +2220,39 @@ if($('#shTspl')) $('#shTspl').onclick=()=>{
   const one=tsplFrom(picked), all=[];
   one.forEach(e=>{for(let i=0;i<n;i++)all.push(e);});
   sendTSPL(all,'selected');
+};
+
+/* One-click sender. Windows can copy a raw file to a shared printer,
+   which is how a TSPL file reaches the printhead untouched — no driver
+   rendering, nothing to scale or centre. */
+if($('#shBat')) $('#shBat').onclick=()=>{
+  const s=readSheet();
+  const bat=[
+    '@echo off',
+    'title Send labels to '+s.share,
+    'setlocal',
+    'set SHARE=\\\\localhost\\'+s.share,
+    'set FILE=',
+    'for /f "delims=" %%f in (\'dir /b /o-d "%~dp0labels-*.txt" 2^>nul\') do (',
+    '  set FILE=%%f',
+    '  goto :found',
+    ')',
+    'echo No labels-*.txt found in this folder.',
+    'echo Export from Store Control first, then run this again.',
+    'pause & exit /b 1',
+    ':found',
+    'echo Sending %FILE% to %SHARE% ...',
+    'copy /b "%~dp0%FILE%" %SHARE% >nul',
+    'if errorlevel 1 (',
+    '  echo FAILED. Check the printer is shared as "'+s.share+'".',
+    '  pause & exit /b 1',
+    ')',
+    'echo Done.',
+    'timeout /t 2 >nul'
+  ].join('\r\n')+'\r\n';
+  persistLocal();
+  download('print.bat',bat,'application/octet-stream');
+  toast('print.bat saved — keep it beside the labels file');
 };
 
 /* ---------- BarTender export ---------- */
