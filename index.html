@@ -100,14 +100,7 @@ button,input,select,textarea{font-family:inherit;font-size:16px;color:inherit}
   background:var(--surface);color:var(--on-surface)}
 #scanInput::placeholder{color:var(--on-surface-dim);font-family:var(--body);font-weight:400;letter-spacing:0}
 #scanInput:focus{border-color:var(--primary);border-width:2px;padding:12px 15px;outline:none}
-#scanQty{width:102px;font-family:var(--mono);font-size:19px;text-align:right;padding:13px 14px;
-  border:1px solid var(--outline);border-radius:12px;background:var(--surface)}
-#scanQty:focus{border-color:var(--primary);border-width:2px;padding:12px 13px;outline:none}
-#qtyMode{flex:0 0 auto;background:var(--sc-high);color:var(--on-surface);border:1px solid var(--outline);
-  border-radius:20px;padding:0 18px;height:48px;font-size:13px;font-weight:500;cursor:pointer;min-width:92px}
-#qtyMode[data-mode="base"]{background:var(--primary-container);color:var(--on-primary-container);border-color:transparent}
-body.simple #qtyMode{display:none}
-#camBtn{flex:0 0 auto;background:var(--grad-app);color:#fff;border:0;border-radius:20px;
+body.simple #camBtn{flex:0 0 auto;background:var(--grad-app);color:#fff;border:0;border-radius:20px;
   padding:0 24px;height:48px;font-size:14px;font-weight:500;cursor:pointer;box-shadow:var(--e1);
   transition:box-shadow .15s,filter .15s}
 #camBtn:hover{box-shadow:var(--e2);filter:brightness(1.09)}
@@ -271,8 +264,7 @@ tr.low:hover td{background:#F6D7B7}
 .stat.alert .k,.stat.alert .v{color:var(--on-warn-container)}
 
 /* ---------------- simple mode ---------------- */
-body.simple .modes,body.simple #scanQty{display:none}
-.bigrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
+body.simple .modes,body.simple .bigrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
 .big{border:0;border-radius:20px;padding:28px 10px;cursor:pointer;box-shadow:var(--e1);
   font-family:var(--display);font-size:19px;font-weight:500;text-transform:none;line-height:1.2;
   transition:box-shadow .16s,transform .16s}
@@ -382,8 +374,7 @@ body.simple .modes,body.simple #scanQty{display:none}
   .logo{height:34px} .brandtext{padding-left:13px} .mast h1{font-size:18px}
   .bay{border-radius:22px} .card{padding:17px;border-radius:14px}
   .modes{margin:19px 14px 0} .bayin{padding:14px} .result{margin:14px}
-  #scanInput,#scanQty{font-size:17px}
-  .stats{grid-template-columns:repeat(2,1fr)}
+  #scanInput,  .stats{grid-template-columns:repeat(2,1fr)}
   .labelgrid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
 }
 @media print{
@@ -439,14 +430,12 @@ body.simple .modes,body.simple #scanQty{display:none}
   <div class="modes" role="group" aria-label="Scan mode">
     <button data-mode="IN"    aria-pressed="true" data-tip="Receive|Adds to stock. Use when material arrives.">Receive</button>
     <button data-mode="OUT"   aria-pressed="false" data-tip="Issue|Takes from stock. Use when material goes to the floor.">Issue</button>
-    <button data-mode="COUNT" aria-pressed="false" data-tip="Count|Stocktake. Scan, then type what you actually counted. The gap is logged as a correction.">Count/button>
+    <button data-mode="COUNT" aria-pressed="false" data-tip="Count|Stocktake. Scan, then type what you actually counted. The gap is logged as a correction.">Count</button>
     <button data-mode="LOOK"  aria-pressed="false" data-tip="Look up|Shows stock without changing anything.">Look up</button>
   </div>
 
   <div class="bayin">
     <input id="scanInput" placeholder="Scan or type code" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Code">
-    <input id="scanQty" type="number" inputmode="decimal" step="any" min="0" value="1" aria-label="Quantity">
-    <button id="qtyMode" data-mode="pack" data-tip="Packs or pieces|Scanning a roll label usually means one roll. Switch to pieces for part of a pack.">Packs</button>
     <button id="camBtn" data-on="0" data-tip="Scan with the camera|Reads the QR square and the barcode. Needs the https:// address, not a file on the disk.">Camera</button>
   </div>
 
@@ -821,6 +810,13 @@ body.simple .modes,body.simple #scanQty{display:none}
 <div id="sheet"><div class="grab"></div><div class="list"></div></div>
 
 <div id="printArea"><div class="labelgrid" id="printGrid"></div></div>
+<div id="scanModal" aria-live="assertive" role="dialog" aria-modal="false">
+  <div class="smbg" id="smBg"></div>
+  <div class="smcard" id="smCard">
+    <button class="smx" id="smClose" aria-label="Close">&#10005;</button>
+    <div id="smBody"></div>
+  </div>
+</div>
 <div id="tip" role="tooltip" aria-hidden="true"></div>
 <div id="toast" role="status" aria-live="polite"></div>
 
@@ -937,7 +933,12 @@ let DB={items:[],batches:[],moves:[],seq:1,
             ]}};
 let mode='IN', editing=null, lastMove=null, saveT=null;
 
-const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const $=s=>{ const m=document.getElementById('smBody');
+  if(m&&m.parentElement.parentElement.classList.contains('on')){ const hit=m.querySelector(s); if(hit) return hit; }
+  return document.querySelector(s); };
+const $$=s=>{ const m=document.getElementById('smBody');
+  if(m&&m.parentElement.parentElement.classList.contains('on')){ const hits=[...m.querySelectorAll(s)]; if(hits.length) return hits; }
+  return [...document.querySelectorAll(s)]; };
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const numv=n=>{const x=parseFloat(n);return isFinite(x)?x:0;};
 const fmt=n=>(Math.round(n*1000)/1000).toLocaleString('en-IN');
@@ -1165,19 +1166,10 @@ function buzz(ok){ if(navigator.vibrate) navigator.vibrate(ok?35:[70,60,70]); }
 $$('.modes button').forEach(b=>b.onclick=()=>{
   mode=b.dataset.mode;
   $$('.modes button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));
-  $('#scanQty').disabled=(mode==='LOOK');
-  $('#scanQty').placeholder = mode==='COUNT'?'counted':'qty';
   if(!isTouch()) $('#scanInput').focus();
 });
 const isTouch=()=>matchMedia('(pointer:coarse)').matches;
 
-let qtyMode='pack';
-$('#qtyMode').onclick=()=>{
-  qtyMode = qtyMode==='pack' ? 'base' : 'pack';
-  const b=$('#qtyMode'); b.dataset.mode=qtyMode;
-  b.textContent = qtyMode==='pack' ? 'Packs' : 'Pieces';
-  if(!isTouch()) $('#scanInput').focus();
-};
 $('#scanInput').addEventListener('keydown',e=>{
   if(e.key==='Enter'){e.preventDefault();const v=$('#scanInput').value;$('#scanInput').value='';handleCode(v);}
 });
@@ -1188,7 +1180,37 @@ document.addEventListener('keydown',e=>{
   if(e.key.length===1)$('#scanInput').focus();
 });
 
-function show(cls,html){const r=$('#result');r.className='result '+cls;r.innerHTML=html;}
+let smTimer=null;
+function closeScanModal(){ clearTimeout(smTimer); $('#scanModal').classList.remove('on'); }
+$('#smBg').onclick=closeScanModal;
+$('#smClose').onclick=closeScanModal;
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeScanModal(); });
+
+/* Every scan result goes into a popup, so it is visible no matter where
+   you are on the page. Choices stay until answered; finished actions
+   clear themselves. */
+function show(cls,html,quiet){
+  const r=$('#result'); r.className='result '+cls; r.innerHTML=html;
+  if(quiet){ closeScanModal(); return; }
+  const card=$('#smCard');
+  card.className='smcard '+cls;
+  $('#smBody').innerHTML=html;
+  $('#scanModal').classList.add('on');
+  clearTimeout(smTimer);
+  const needsAnswer=/id="(uPack|uBase|pkAll|pkPart|askIn|askOut|ok|pkOk|uOk|cOk)"/.test(html);
+  if(!needsAnswer) smTimer=setTimeout(closeScanModal, cls==='bad'?7000:4500);
+  if(!isTouch()) setTimeout(()=>$('#scanInput').focus(),30);
+}
+/* one line describing how an item is set up, shown wherever it helps */
+function setupLine(it){
+  if(!it)return '';
+  const bits=[];
+  bits.push(hasPack(it)? ('1 '+it.pack+' = '+fmt(packSize(it))+' '+unitName(it,packSize(it)))
+                       : ('loose · counted in '+unitName(it,2)));
+  if(isWhole(it))  bits.push('whole '+packName(it,2)+' only');
+  if(isSerial(it)) bits.push('each '+it.pack+' tracked');
+  return bits.join(' · ');
+}
 
 async function handleCode(raw){
   const code=String(raw||'').trim();
@@ -1220,7 +1242,8 @@ async function handleCode(raw){
       <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}</div>
       <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))}</span>
         ${b?`<span class="un">· this batch ${fmt(bHand)}</span>`:''}</div>
-      <div class="rcd" style="margin-top:6px">${packText(it)?esc(packText(it))+' · ':''}reorder below ${esc(qtyText(it,it.min))} · ${money(onHand*it.rate)}</div>
+      <div class="rcd" style="margin-top:6px">${esc(setupLine(it))}</div>
+      <div class="rcd">reorder below ${esc(qtyText(it,it.min))} · ${money(onHand*it.rate)}</div>
       ${isSerial(it)&&kids.length?`<div class="rcd" style="margin-top:8px">Open ${esc(packName(it,2))}: `
         +kids.slice(0,10).map(x=>esc(x.bcode)+' ('+fmt(byBatch[x.bcode]||0)+')').join(' · ')
         +(kids.length>10?' …':'')+`</div>`:''}`);
@@ -1232,98 +1255,41 @@ async function handleCode(raw){
   if(b && isSerial(it) && (mode==='IN'||mode==='OUT')){
     beep(true); buzz(true); askPack(code,it,b,onHand,bHand,mode); return;
   }
-  /* Item code on a packed item: ask packs-or-pieces here and now,
-     rather than trusting a toggle set earlier. */
-  if(!b && hasPack(it) && (mode==='IN'||mode==='OUT')){
-    beep(true); buzz(true); askUnit(code,it,onHand,mode); return;
+  /* Quantity is always asked after the scan, never carried in from a box
+     that was filled minutes ago. */
+  if(mode==='IN'||mode==='OUT'){
+    beep(true); buzz(true); askUnit(code,it,b?bHand:onHand,mode,b); return;
   }
-
-  const entered=Math.abs(numv($('#scanQty').value));
-  const usePacks = hasPack(it) && (isWhole(it) || qtyMode==='pack');
-  if(isWhole(it) && entered%1!==0){
+  if(mode==='COUNT'){
+    beep(true); buzz(true); askCount(code,it,b?bHand:onHand,b); return;
+  }
+  /* No pack configured: say so, instead of silently moving single units. */
+  if(!b && !hasPack(it) && (mode==='IN'||mode==='OUT') && it.pack && !packSize(it)){
     beep(false);
-    show('bad',`<span class="tag err">Whole ${esc(packName(it,2))} only</span>
+    show('bad',`<span class="tag err">Pack size missing</span>
       <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
       <div class="rcd">${esc(code)}</div>
-      <div class="rcd" style="margin-top:8px">${esc(it.name)} moves as complete ${esc(packName(it,2))}.
-        Enter a whole number, not ${esc(fmt(entered))}.</div>`);
-    $('#scanQty').select(); return;
-  }
-  const qty = usePacks ? toBase(it,entered) : entered;
-  const enteredText = usePacks
-    ? fmt(entered)+' '+packName(it,entered)+' ('+fmt(qty)+' '+unitName(it,qty)+')'
-    : fmt(qty)+' '+unitName(it,qty);
-  /* A pack item scanned in Pieces mode is nearly always a mis-set toggle,
-     so say so before it becomes a stock error. */
-  if(hasPack(it)&&!usePacks&&mode!=='COUNT'){
-    beep(false);
-    show('bad',`<span class="tag err">Pieces, not ${esc(packName(it,2))}</span>
-      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
-      <div class="rcd">${esc(code)} · ${esc(packText(it))}</div>
-      <div class="rcd" style="margin-top:8px">The quantity box is set to <b>Pieces</b>, so this would move
-        ${fmt(qty)} ${esc(unitName(it,qty))}, not ${fmt(entered)} ${esc(packName(it,entered))}.</div>
-      <div class="row mt"><button class="btn sm" id="fixMode">Switch to ${esc(packName(it,2))} and repeat</button></div>`);
-    $('#fixMode').onclick=()=>{ qtyMode='pack';
-      const bt=$('#qtyMode'); bt.dataset.mode='pack'; bt.textContent='Packs';
-      handleCode(code); };
+      <div class="rcd" style="margin-top:8px">This item is set to arrive in ${esc(it.pack)}s but nobody has said
+        how many ${esc(it.unit||'pcs')} are in one. Until that is filled in it can only move single ${esc(it.unit||'pcs')}.</div>
+      <div class="row mt"><button class="btn sm" id="fixPack">Set it now</button></div>`);
+    $('#fixPack').onclick=()=>editItem(it.code);
     return;
   }
 
-  if(mode==='COUNT'){
-    if($('#scanQty').value===''){beep(false);toast('Type the counted quantity first',true);return;}
-    const target=b?bHand:onHand, diff=qty-target;
-    if(diff===0){beep(true);show('ok',`<span class="tag adj">Count matches</span>
-      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
-      <div class="math"><span class="now">${fmt(qty)}</span><span class="un">${esc(qtyText(it,qty))} — no correction needed</span></div>`);return;}
-    const mv={id:uid(),ts:nowISO(),bcode:b?b.bcode:'',code:it.code,type:'ADJ',qty:diff,
-      note:'Stocktake: system '+fmt(target)+' → counted '+fmt(qty)+' '+it.unit,user:DB.settings.user||'—'};
-    await pushMove(mv); lastMove=mv; beep(true);buzz(true);
-    show('ok',`<span class="tag adj">Stock corrected</span>
-      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
-      <div class="math"><span class="was">${fmt(target)}</span><span class="now">${fmt(qty)}</span>
-        <span class="un">${esc(it.unit)} (${diff>0?'+':''}${fmt(diff)})</span></div>
-      ${undoBtn()}`);
-    wireUndo(); render(); return;
-  }
-
-  if(!qty){beep(false);toast('Set a quantity first',true);$('#scanQty').select();return;}
-
-  if(mode==='OUT'){
-    const avail=b?bHand:onHand;
-    if(qty>avail){beep(false);buzz(false);
-      show('bad',`<span class="tag err">Not enough stock</span>
-        <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
-        <div class="math"><span class="now">${fmt(avail)}</span><span class="un">${esc(qtyText(it,avail))} available · tried ${esc(enteredText)}</span></div>`);
-      return;}
-  }
-
-  const mv={id:uid(),ts:nowISO(),bcode:b?b.bcode:'',code:it.code,type:mode,qty:qty,
-    note:'',user:DB.settings.user||'—'};
-  await pushMove(mv); lastMove=mv;
-  const after=(mode==='IN'?onHand+qty:onHand-qty);
-  const low=it.min>0&&after<=it.min;
-  beep(true);buzz(true);
-  show('ok',`<span class="tag ${mode==='IN'?'in':'out'}">${mode==='IN'?'Received':'Issued'} ${esc(enteredText)}</span>
-    <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
-    <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}${b&&b.ven?' · '+esc(b.ven):''}</div>
-    <div class="math"><span class="was">${fmt(onHand)}</span>
-      <span class="now">${fmt(after)}</span>
-      <span class="un">${esc(qtyText(it,after))} left</span>${low?'<span class="pill">Reorder now</span>':''}</div>
-    ${undoBtn()}`);
-  wireUndo(); render();
 }
 
 /* ---------- packs or pieces, decided per scan ---------- */
 let UNITASK=null;
-function askUnit(code,it,onHand,dir){
-  UNITASK={code,it,onHand,dir};
+function askUnit(code,it,onHand,dir,b){
+  UNITASK={code,it,onHand,dir,b:b||null};
   const pn=packName(it,2), un=unitName(it,2);
-  if(isWhole(it)){ askUnitQty(true); return; }
+  if(!hasPack(it)){ askUnitQty(false); return; }   /* loose item: just a number */
+  if(isWhole(it)){ askUnitQty(true); return; }     /* rolls only */
   show('info',`<span class="tag look">${esc(dir==='IN'?'Receiving':'Issuing')}</span>
     <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
     <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}</div>
     <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))} in store</span></div>
-    ${packText(it)?`<div class="rcd">${esc(packText(it))}</div>`:''}
+    <div class="rcd">${esc(setupLine(it))}</div>
     <div class="bigrow">
       <button class="big ${dir==='IN'?'in':'out'}" id="uPack">Whole ${esc(pn)}<small>${fmt(packSize(it))} ${esc(un)} each</small></button>
       <button class="big grey" id="uBase">Loose ${esc(un)}<small>type the number</small></button>
@@ -1331,7 +1297,7 @@ function askUnit(code,it,onHand,dir){
     <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="uCancel">Cancel</button>`);
   $('#uPack').onclick=()=>askUnitQty(true);
   $('#uBase').onclick=()=>askUnitQty(false);
-  $('#uCancel').onclick=()=>{UNITASK=null;show('','<p class="idle">Ready. Scan the next label.</p>');};
+  $('#uCancel').onclick=()=>{UNITASK=null;show('','<p class="idle">Ready. Scan the next label.</p>',true);};
 }
 function askUnitQty(inPacks){
   if(!UNITASK)return;
@@ -1364,7 +1330,7 @@ function askUnitQty(inPacks){
       draw();
     });
     const ok=$('#uOk'); if(ok&&!ok.disabled) ok.onclick=()=>commitUnit(base,inPacks?n:null);
-    $('#uBack').onclick=()=>{ if(isWhole(it)){UNITASK=null;show('','<p class="idle">Ready. Scan the next label.</p>');}
+    $('#uBack').onclick=()=>{ if(isWhole(it)){UNITASK=null;show('','<p class="idle">Ready. Scan the next label.</p>',true);}
       else askUnit(code,it,onHand,dir); };
   };
   draw();
@@ -1377,7 +1343,8 @@ async function commitUnit(qty,packsTyped){
   const said = packsTyped!=null
     ? fmt(packsTyped)+' '+packName(it,packsTyped)+' ('+fmt(qty)+' '+unitName(it,qty)+')'
     : fmt(qty)+' '+unitName(it,qty);
-  const mv={id:uid(),ts:nowISO(),bcode:'',code:it.code,type:dir,qty:qty,note:'',user:DB.settings.user||'—'};
+  const bc=UNITASK.b?UNITASK.b.bcode:'';
+  const mv={id:uid(),ts:nowISO(),bcode:bc,code:it.code,type:dir,qty:qty,note:'',user:DB.settings.user||'—'};
   await pushMove(mv); lastMove=mv; UNITASK=null;
   const after=dir==='IN'?onHand+qty:onHand-qty;
   const low=it.min>0&&after<=it.min;
@@ -1388,6 +1355,51 @@ async function commitUnit(qty,packsTyped){
       <span class="un">${esc(qtyText(it,after))} left</span>${low?'<span class="pill">Reorder now</span>':''}</div>
     ${undoBtn()}`);
   wireUndo(); render();
+}
+
+/* ---------- stocktake ---------- */
+function askCount(code,it,onHand,b){
+  let buf='';
+  const draw=()=>{
+    const v=buf===''?'0':buf, n=parseFloat(v)||0, diff=n-onHand;
+    show('info',`<span class="tag adj">Count</span>
+      <div class="rnm" style="margin-top:5px">${esc(it.name)}</div>
+      <div class="rcd">${esc(code)} · system says ${esc(qtyText(it,onHand))}</div>
+      <div class="qtybox">${esc(v)} <span style="font-size:15px;opacity:.6">${esc(unitName(it,n))}</span></div>
+      <div class="rcd" style="text-align:right;margin-top:6px">${buf===''?'&nbsp;':(diff===0?'Matches the system':(diff>0?'+':'')+fmt(diff)+' correction')}</div>
+      <div class="pad">
+        ${[1,2,3,4,5,6,7,8,9].map(k=>`<button data-k="${k}">${k}</button>`).join('')}
+        <button data-k=".">.</button><button data-k="0">0</button><button data-k="del">&#9003;</button>
+      </div>
+      <button class="confirm in" id="cOk" ${buf===''?'disabled':''}>Record count of ${esc(v)}</button>
+      <button class="big grey" style="width:100%;margin-top:8px;font-size:13px;padding:11px" id="cCancel">Cancel</button>`);
+    $$('.pad button').forEach(bt=>bt.onclick=()=>{
+      const k=bt.dataset.k;
+      if(k==='del')buf=buf.slice(0,-1);
+      else if(k==='.'){ if(!buf.includes('.'))buf=(buf||'0')+'.'; }
+      else buf=(buf==='0'?'':buf)+k;
+      if(buf.length>9)buf=buf.slice(0,9);
+      draw();
+    });
+    const ok=$('#cOk'); if(ok&&!ok.disabled) ok.onclick=async()=>{
+      const diff=(parseFloat(buf||'0'))-onHand;
+      if(diff===0){ beep(true);
+        show('ok',`<span class="tag adj">Count matches</span>
+          <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+          <div class="rcd">${esc(code)} · nothing to correct</div>`); return; }
+      const mv={id:uid(),ts:nowISO(),bcode:b?b.bcode:'',code:it.code,type:'ADJ',qty:diff,
+        note:'Stocktake: system '+fmt(onHand)+' → counted '+fmt(parseFloat(buf)),user:DB.settings.user||'—'};
+      await pushMove(mv); lastMove=mv; beep(true); buzz(true);
+      show('ok',`<span class="tag adj">Stock corrected</span>
+        <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
+        <div class="math"><span class="was">${fmt(onHand)}</span><span class="now">${fmt(parseFloat(buf))}</span>
+          <span class="un">${esc(unitName(it,parseFloat(buf)))} (${diff>0?'+':''}${fmt(diff)})</span></div>
+        ${undoBtn()}`);
+      wireUndo(); render();
+    };
+    $('#cCancel').onclick=()=>show('','<p class="idle">Ready. Scan the next label.</p>',true);
+  };
+  draw();
 }
 
 /* ---------- a tracked pack ---------- */
@@ -1423,7 +1435,7 @@ function askPack(code,it,b,onHand,left,dir){
     <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="pkCancel">Cancel</button>`);
   $('#pkAll').onclick=()=>commitPack(dir==='IN'?(full-left):left);
   if($('#pkPart')) $('#pkPart').onclick=()=>askPackQty();
-  $('#pkCancel').onclick=()=>{PACKASK=null;show('','<p class="idle">Ready. Scan the next label.</p>');};
+  $('#pkCancel').onclick=()=>{PACKASK=null;show('','<p class="idle">Ready. Scan the next label.</p>',true);};
 }
 function askPackQty(){
   if(!PACKASK)return;
@@ -1489,19 +1501,24 @@ async function commitPack(qty){
 /* ---------- simple mode: ask direction, then quantity ---------- */
 let ASK=null;
 function askDirection(code,it,b,onHand,bHand){
-  ASK={code,it,b,onHand};
+  ASK={code,it,b,onHand,bHand};
   show('info',`<div class="rnm">${esc(it.name)}</div>
     <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}</div>
     <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))} in store</span></div>
-    ${packText(it)?`<div class="rcd">${esc(packText(it))}</div>`:''}
+    <div class="rcd">${esc(setupLine(it))}</div>
     <div class="bigrow">
       <button class="big in"  id="askIn">Came in<small>Add to store</small></button>
       <button class="big out" id="askOut">Went out<small>Take from store</small></button>
     </div>
     <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="askCancel">Cancel</button>`);
-  $('#askIn').onclick=()=>askQty('IN');
-  $('#askOut').onclick=()=>askQty('OUT');
-  $('#askCancel').onclick=()=>{ASK=null;show('','<p class="idle">Ready. Scan the next label.</p>');};
+  const go=(dir)=>{
+    if(b && isSerial(it)){ askPack(code,it,b,onHand,(bHand==null?onHand:bHand),dir); return; }
+    if(hasPack(it)){ askUnit(code,it,onHand,dir); return; }
+    askQty(dir);
+  };
+  $('#askIn').onclick=()=>go('IN');
+  $('#askOut').onclick=()=>go('OUT');
+  $('#askCancel').onclick=()=>{ASK=null;show('','<p class="idle">Ready. Scan the next label.</p>',true);};
 }
 function askQty(dir){
   if(!ASK)return;
@@ -2519,7 +2536,7 @@ $('#clrMove').onclick=async()=>{
   if(!confirm('Last check — have you downloaded a backup?\n\nThis cannot be undone.'))return;
   DB.moves=[]; DB.batches=[]; lastMove=null; ASK=null; PACKASK=null;
   persistLocal(); render();
-  show('','<p class="idle">Ready. Stock is at zero — scan or book in your real opening quantities.</p>');
+  show('','<p class="idle">Ready. Stock is at zero — scan or book in your real opening quantities.</p>',true);
   toast('Cleared. Items kept, stock at zero');
 };
 $('#clrAll').onclick=async()=>{
@@ -2529,7 +2546,7 @@ $('#clrAll').onclick=async()=>{
   DB={items:[],batches:[],moves:[],seq:1,settings:keep};
   lastMove=null; ASK=null; PACKASK=null;
   persistLocal(); render();
-  show('','<p class="idle">Cleared. Add your items to begin.</p>');
+  show('','<p class="idle">Cleared. Add your items to begin.</p>',true);
   toast('Everything cleared on this device');
 };
 
