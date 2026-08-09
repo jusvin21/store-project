@@ -361,7 +361,7 @@ body.simple .modes,body.simple #scanQty{display:none}
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-word}
 .label.mini .lcode{font-family:var(--mono);font-weight:600;font-size:1.6mm;line-height:1.05;
   letter-spacing:.02em;text-align:left;white-space:nowrap;overflow:hidden}
-.label.mini .lmeta{font-family:var(--mono);font-size:1.35mm;line-height:1.05;color:#000;
+.label.mini .lmeta{font-family:var(--mono);font-size:1.2mm;line-height:1.05;color:#000;
   text-transform:uppercase;white-space:nowrap;overflow:hidden;margin:0}
 .labelgrid.minigrid{grid-template-columns:repeat(auto-fill,minmax(25mm,25mm));gap:12px;align-items:start}
 .labelgrid.minigrid .lsel{font-size:11px;padding:3px 10px;margin-bottom:6px}
@@ -388,12 +388,20 @@ body.simple .modes,body.simple #scanQty{display:none}
   body{background:#fff}
   body::before,.brandrule{display:none!important}
   /* one label per page, edge to edge — for a die-cut roll */
+  /* single label per page — continuous or single-across roll */
   body.roll #printArea{padding:0!important}
   body.roll .labelgrid,body.roll .labelgrid.minigrid{display:block!important;gap:0!important}
   body.roll .minihold{display:block;page-break-after:always;break-after:page}
   body.roll .minihold:last-child{page-break-after:auto;break-after:auto}
   body.roll .label,body.roll .label.mini{border:0!important;margin:0!important}
   body.roll.outline .label.mini{border:0.2mm dashed #000!important}
+  /* multi-across die-cut sheet — geometry comes from Sheet layout */
+  body.sheet #printArea{padding:0!important}
+  body.sheet .labelgrid,body.sheet .labelgrid.minigrid{display:grid!important;justify-content:start;align-content:start}
+  body.sheet .minihold{display:block;break-inside:avoid;page-break-inside:avoid}
+  body.sheet .label,body.sheet .label.mini{border:0!important;margin:0!important}
+  body.sheet.outline .label.mini,body.sheet .spacer{border:0.2mm dashed #999!important}
+  .spacer{display:block}
   .wrap,#toast,#tip,#botNav,#sheet,#sheetBg{display:none!important}
   #printArea{display:block!important;padding:4mm}
   .labelgrid{grid-template-columns:repeat(3,1fr);gap:3mm}
@@ -577,8 +585,8 @@ body.simple .modes,body.simple #scanQty{display:none}
         <select id="lblKind" class="txt"><option value="item">Item / rack labels</option><option value="batch">Pack &amp; batch labels</option></select>
         <select id="lblTarget" class="txt"
           data-tip="Where it prints|Label roll sets the page to one 25x15 mm label. A4 sheet lays out 4 across on ordinary paper.">
-          <option value="roll">Label roll — one per label</option>
-          <option value="sheet">A4 sheet — 4 across</option>
+          <option value="sheet">Die-cut sheet — many across</option>
+          <option value="roll">Single label per page</option>
         </select>
         <label class="lsel"><input type="checkbox" id="lblOutline"> Outline</label>
         <select id="lblWhen" class="txt"
@@ -603,6 +611,32 @@ body.simple .modes,body.simple #scanQty{display:none}
     </div>
     <div class="labelgrid" id="lGrid"></div>
     <div class="empty" id="eLbl" style="display:none">Nothing to print yet.</div>
+  </div>
+
+  <div class="card" id="sheetCard">
+    <h2 class="sec">Sheet layout</h2>
+    <p class="hint" style="margin:0 0 14px">Measure your label sheet with a ruler and enter it once. The app then fills
+      every label in a row before starting the next, so nothing is wasted. Use <b>Skip</b> to start part-way down a
+      sheet you have already used.</p>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(126px,1fr))">
+      <label class="f"><span>Labels across</span><input id="shCols" type="number" min="1" max="12" value="4"></label>
+      <label class="f"><span>Label width (mm)</span><input id="shW" type="number" step="0.5" value="25"></label>
+      <label class="f"><span>Label height (mm)</span><input id="shH" type="number" step="0.5" value="15"></label>
+      <label class="f"><span>Gap across (mm)</span><input id="shGx" type="number" step="0.5" value="3"></label>
+      <label class="f"><span>Gap down (mm)</span><input id="shGy" type="number" step="0.5" value="3"></label>
+      <label class="f"><span>Margin left (mm)</span><input id="shMl" type="number" step="0.5" value="4"></label>
+      <label class="f"><span>Margin top (mm)</span><input id="shMt" type="number" step="0.5" value="4"></label>
+      <label class="f"><span>Page width (mm)</span><input id="shPw" type="number" step="1" value="210"></label>
+      <label class="f"><span>Page height (mm)</span><input id="shPh" type="number" step="1" value="297"></label>
+      <label class="f"><span>Skip first N labels</span><input id="shSkip" type="number" min="0" value="0"
+        data-tip="Part-used sheet|If the first 6 stickers are gone, put 6 here and printing starts at position 7."></label>
+    </div>
+    <div class="row mt">
+      <button class="btn ghost" id="shSave">Save layout</button>
+      <button class="btn ghost" id="shTest"
+        data-tip="Alignment test|Prints empty outlines in every position. Hold the sheet up to the light against a printed page to check the fit before wasting labels.">Print alignment test</button>
+      <span class="hint" id="shPrev"></span>
+    </div>
   </div>
 
   <div class="card">
@@ -857,6 +891,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
+            sheet:{cols:4,w:25,h:15,gx:3,gy:3,mt:4,ml:4,pw:210,ph:297,skip:0},
             cats:[
               {name:'Terminals',prefix:'TRM',unit:'pcs', pack:'roll',   packQty:3000,minPacks:2,whole:true, col:'#9A4409'},
               {name:'Couplers', prefix:'CPL',unit:'pcs', pack:'packet', packQty:100, minBase:500,serial:true, col:'#0E7490'},
@@ -1748,7 +1783,7 @@ $('#saveDel').onclick=async()=>{
     if(made.length>1) h=made.map(x=>labelHTML(x,it,false)).join('');
     else for(let i=0;i<Math.max(1,copies);i++)h+=labelHTML(b,it,false);
     $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
-    $('#printGrid').innerHTML=h;applyPageRule();window.print();};
+    $('#printGrid').innerHTML=skipCells()+h;applyPageRule();window.print();};
   $('#delHint').textContent = made.length>1
     ? (made.length+' '+packName(it,made.length)+' booked in — '+made[0].bcode+' to '+made[made.length-1].bcode+'. Each needs its own label.')
     : ('Batch '+b.bcode+' booked in.');
@@ -1764,7 +1799,7 @@ function labelStyle(){const el=$('#lblSize');return el?el.value:'mini';}
    the real thing, not a scaled screenshot. */
 function miniLabel(b,it,chk){
   const code=b?b.bcode:it.code;
-  const packbit=hasPack(it)?(it.pack.toUpperCase()+' '+fmt(packSize(it))+' '+it.unit):'';
+  const packbit=hasPack(it)?(String(packSize(it))+' '+String(it.unit).toUpperCase()+'/'+it.pack.toUpperCase()):'';
   const meta=b?(b.lot?'LOT '+b.lot:(b.recv||'')):(packbit||(it.loc?'RACK '+it.loc:(it.unit||'')));
   return `<div class="minihold">
     ${chk?`<label class="lsel"><input type="checkbox" class="lchk" value="${esc(code)}" checked>print</label>`:''}
@@ -1801,13 +1836,74 @@ $('#lblTarget').onchange=()=>{ if($('#lblTarget').value==='roll') $('#lblSize').
 
 /* @page cannot be switched with a class, so the rule is rewritten
    just before the print dialog opens. */
-function applyPageRule(){
-  const roll = $('#lblTarget') && $('#lblTarget').value==='roll';
+function sheet(){ return DB.settings.sheet||(DB.settings.sheet={cols:4,w:25,h:15,gx:3,gy:3,mt:4,ml:4,pw:210,ph:297,skip:0}); }
+function loadSheet(){
+  const s=sheet();
+  [['shCols','cols'],['shW','w'],['shH','h'],['shGx','gx'],['shGy','gy'],
+   ['shMl','ml'],['shMt','mt'],['shPw','pw'],['shPh','ph'],['shSkip','skip']]
+   .forEach(([id,k])=>{ if($('#'+id)) $('#'+id).value=s[k]; });
+  sheetPrev();
+}
+function sheetPrev(){
+  const s=sheet();
+  const perRow=Math.max(1,+s.cols);
+  const rows=Math.max(1,Math.floor((s.ph-s.mt+s.gy)/(s.h+s.gy)));
+  const span=s.ml+perRow*s.w+(perRow-1)*s.gx;
+  const over=span>s.pw;
+  if($('#shPrev')) $('#shPrev').innerHTML = over
+    ? '<b style="color:var(--error)">Too wide: '+fmt(Math.round(span*10)/10)+' mm needed, page is '+s.pw+' mm</b>'
+    : (perRow+' across x '+rows+' down = '+(perRow*rows)+' labels per sheet');
+}
+['shCols','shW','shH','shGx','shGy','shMl','shMt','shPw','shPh','shSkip'].forEach(id=>{
+  const el=$('#'+id); if(el) el.addEventListener('input',()=>{ readSheet(); sheetPrev(); });
+});
+function readSheet(){
+  const s=sheet();
+  s.cols=Math.max(1,parseInt($('#shCols').value)||1);
+  s.w=numv($('#shW').value)||25; s.h=numv($('#shH').value)||15;
+  s.gx=numv($('#shGx').value); s.gy=numv($('#shGy').value);
+  s.ml=numv($('#shMl').value); s.mt=numv($('#shMt').value);
+  s.pw=numv($('#shPw').value)||210; s.ph=numv($('#shPh').value)||297;
+  s.skip=Math.max(0,parseInt($('#shSkip').value)||0);
+  return s;
+}
+if($('#shSave')) $('#shSave').onclick=()=>{ readSheet(); persistLocal(); sheetPrev(); toast('Sheet layout saved'); };
+if($('#shTest')) $('#shTest').onclick=()=>{
+  const s=readSheet();
+  const rows=Math.max(1,Math.floor((s.ph-s.mt+s.gy)/(s.h+s.gy)));
+  let h='';
+  for(let i=0;i<s.cols*rows;i++)
+    h+='<div class="minihold"><div class="label mini spacer" style="display:flex;align-items:center;justify-content:center;font-size:2.2mm">'+(i+1)+'</div></div>';
+  $('#printGrid').innerHTML=h;
+  applyPageRule(true); window.print();
+};
+
+function applyPageRule(forceSheet){
+  const mode = forceSheet ? 'sheet' : (($('#lblTarget')&&$('#lblTarget').value)||'roll');
+  const s=sheet();
   let el=document.getElementById('pageRule');
   if(!el){el=document.createElement('style');el.id='pageRule';document.head.appendChild(el);}
-  el.textContent = roll ? '@page{size:25mm 15mm;margin:0}' : '@page{size:A4;margin:6mm}';
-  document.body.classList.toggle('roll',!!roll);
+  if(mode==='sheet'){
+    el.textContent =
+      '@page{size:'+s.pw+'mm '+s.ph+'mm;margin:0}'
+      +'@media print{'
+      +'#printArea{padding:'+s.mt+'mm 0 0 '+s.ml+'mm!important}'
+      +'.labelgrid,.labelgrid.minigrid{grid-template-columns:repeat('+s.cols+','+s.w+'mm)!important;'
+      +'column-gap:'+s.gx+'mm!important;row-gap:'+s.gy+'mm!important}'
+      +'.label.mini,.spacer{width:'+s.w+'mm!important;height:'+s.h+'mm!important}'
+      +'}';
+  }else{
+    el.textContent='@page{size:'+s.w+'mm '+s.h+'mm;margin:0}';
+  }
+  document.body.classList.toggle('roll',mode==='roll');
+  document.body.classList.toggle('sheet',mode==='sheet');
   document.body.classList.toggle('outline',!!($('#lblOutline')&&$('#lblOutline').checked));
+}
+/* blank positions so a part-used sheet is not wasted */
+function skipCells(){
+  const n=sheet().skip||0; let h='';
+  for(let i=0;i<n;i++) h+='<div class="minihold"><div class="label mini spacer"></div></div>';
+  return h;
 }
 
 /* everything booked in today, newest first */
@@ -1826,7 +1922,7 @@ $('#dayPrint').onclick=()=>{
   const list=todaysBatches();
   if(!list.length){toast('Nothing was booked in today',true);return;}
   $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
-  $('#printGrid').innerHTML=labelsForBatches(list);
+  $('#printGrid').innerHTML=skipCells()+labelsForBatches(list);
   applyPageRule();window.print();
 };
 $('#dayCsv').onclick=()=>{
@@ -1852,7 +1948,7 @@ $('#lPrint').onclick=()=>{
   picked.forEach(code=>{const b=batch(code),it=b?item(b.code):item(code);
     if(it)for(let i=0;i<n;i++)h+=labelHTML(b,it,false);});
   $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
-  $('#printGrid').innerHTML=h;applyPageRule();window.print();
+  $('#printGrid').innerHTML=skipCells()+h;applyPageRule();window.print();
 };
 
 /* ---------- category rules ---------- */
@@ -2259,7 +2355,7 @@ function render(){renderStock();renderItems();renderLabels();renderLog();renderC
     DB={items:s.items,batches:s.batches||[],moves:s.moves||[],seq:s.seq||s.items.length+1,
         settings:Object.assign(DB.settings,s.settings||{})};
   }
-  loadSettings();
+  loadSettings(); loadSheet();
   document.body.classList.toggle('simple',!!+DB.settings.simple);
   paintNav();
   if(SB.on){ try{ await SB.pull(); persistLocal(); }catch(e){ toast('Cloud unreachable — using this device',true); } }
