@@ -350,19 +350,21 @@ body.simple .modes,body.simple #scanQty{display:none}
   background:var(--sc);border-radius:16px;padding:5px 13px}
 .lsel input{width:18px;height:18px;accent-color:var(--primary)}
 
-.label.mini{width:25mm;height:15mm;padding:0.6mm;gap:0;display:flex;flex-direction:row;align-items:center;
-  overflow:hidden;border:1px solid #000;background:#fff;color:#000}
-.label.mini .qr{flex:0 0 13.2mm;width:13.2mm;height:13.2mm}
-.label.mini .qr svg{width:13.2mm;height:13.2mm;display:block}
-.label.mini .side{flex:1 1 auto;min-width:0;padding-left:0.6mm;display:flex;flex-direction:column;
-  justify-content:center;gap:0.3mm}
-.label.mini .lnm{font-family:var(--display);font-weight:700;font-size:1.75mm;line-height:1.05;
-  text-transform:uppercase;letter-spacing:0;overflow:hidden;
+.label.mini{width:25mm;height:15mm;padding:0.7mm;display:flex;flex-direction:column;
+  overflow:hidden;border:1px solid #000;background:#fff;color:#000;gap:0}
+.label.mini .mtop{display:flex;flex:1 1 auto;min-height:0;gap:0.7mm;align-items:flex-start}
+.label.mini .qr{flex:0 0 10.6mm;width:10.6mm;height:10.6mm}
+.label.mini .qr svg{width:10.6mm;height:10.6mm;display:block}
+.label.mini .side{flex:1 1 auto;min-width:0;display:flex;flex-direction:column;gap:0.25mm;overflow:hidden}
+.label.mini .lnm{font-family:var(--display);font-weight:700;font-size:1.85mm;line-height:1.1;
+  text-transform:uppercase;letter-spacing:-.01em;overflow:hidden;
   display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-word}
-.label.mini .lcode{font-family:var(--mono);font-weight:600;font-size:1.6mm;line-height:1.05;
-  letter-spacing:.02em;text-align:left;white-space:nowrap;overflow:hidden}
-.label.mini .lmeta{font-family:var(--mono);font-size:1.2mm;line-height:1.05;color:#000;
-  text-transform:uppercase;white-space:nowrap;overflow:hidden;margin:0}
+.label.mini .lmeta{font-family:var(--mono);font-size:1.25mm;line-height:1.15;color:#000;
+  text-transform:uppercase;overflow:hidden;margin:0;white-space:nowrap;text-overflow:clip}
+/* the code spans the full width, so a long name can never squeeze it */
+.label.mini .lcode{flex:0 0 auto;font-family:var(--mono);font-weight:700;font-size:2.1mm;
+  line-height:1.1;letter-spacing:.02em;text-align:left;white-space:nowrap;overflow:hidden;
+  border-top:0.15mm solid #000;padding-top:0.3mm;margin-top:0.3mm}
 .labelgrid.minigrid{grid-template-columns:repeat(auto-fill,minmax(25mm,25mm));gap:12px;align-items:start}
 .labelgrid.minigrid .lsel{font-size:11px;padding:3px 10px;margin-bottom:6px}
 .minihold{display:flex;flex-direction:column;align-items:flex-start}
@@ -558,6 +560,10 @@ body.simple .modes,body.simple #scanQty{display:none}
     <p class="hint" style="margin:0 0 11px">Each delivery gets its own batch code and its own label. Same item, different arrival — you keep track of which vendor and which lot the stock on the rack came from.</p>
     <div class="grid">
       <label class="f req"><span>Item</span><select id="dItem"></select></label>
+      <label class="f"><span id="dPerLbl">Per pack this time</span>
+        <input id="dPer" type="number" inputmode="decimal" step="any" value="0"
+        data-tip="This delivery only|Rolls vary. Enter what is actually on the rolls that arrived — 3000, 4000, 5000. It is saved against these rolls, not the item.">
+        <span class="hint" id="dPerHint"></span></label>
       <label class="f req"><span>Quantity received</span>
         <div class="row" style="gap:6px;flex-wrap:nowrap">
           <input id="dQty" type="number" inputmode="decimal" step="any" value="0" style="flex:1;min-width:0">
@@ -610,6 +616,8 @@ body.simple .modes,body.simple #scanQty{display:none}
       <span style="font-weight:500;color:var(--on-primary-container)">Today's delivery</span>
       <button class="btn sm" id="dayPrint"
         data-tip="One tap|Selects everything booked in today and opens the print dialog.">Print today's labels</button>
+      <label class="lsel"><input type="checkbox" id="dayNew" checked
+        data-tip="Skip what you already printed|Once a label has been printed it is remembered, so pressing print again only gives you the new ones.">Only unprinted</label>
       <button class="btn sm" id="dayTspl"
         data-tip="Straight to the TSC printer|Writes the printer's own commands. Exact dot positions, so nothing can be centred or scaled by a driver.">Send to TSC (.txt)</button>
       <button class="btn ghost sm" id="dayCsv"
@@ -634,7 +642,9 @@ body.simple .modes,body.simple #scanQty{display:none}
       <label class="f"><span>Margin left (mm)</span><input id="shMl" type="number" step="0.5" value="0"></label>
       <label class="f"><span>Margin top (mm)</span><input id="shMt" type="number" step="0.5" value="0"></label>
       <label class="f"><span>Web / page width (mm)</span><input id="shPw" type="number" step="1" value="100"></label>
-      <label class="f"><span>Row height = label height (mm)</span><input id="shPh" type="number" step="1" value="15"></label>
+      <label class="f"><span>Page height (mm)</span><input id="shPh" type="number" step="1" value="15"
+  data-tip="Page height|On a continuous roll set this to the label height, so one row of labels is one page. Only use a big number like 297 for A4 sheets of labels.">
+  <span class="hint" id="phPrev"></span></label>
       <label class="f"><span>Rotate label</span><select id="shRot"
         data-tip="Turn the printed content|Use this if the text comes out sideways on the sticker. 90 is the usual fix.">
         <option value="0">None</option><option value="90">90&deg;</option>
@@ -913,7 +923,7 @@ let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
             sheet:{cols:4,w:22,h:15,gx:3,gy:3,mt:0,ml:0,pw:100,ph:15,skip:0,share:'TSC',rot:0},
             cats:[
-              {name:'Terminals',prefix:'TRM',unit:'pcs', pack:'roll',   packQty:3000,minPacks:2,whole:true, col:'#9A4409'},
+              {name:'Terminals',prefix:'TRM',unit:'pcs', pack:'roll',   packQty:3000,minPacks:2,whole:true, serial:true, col:'#9A4409'},
               {name:'Couplers', prefix:'CPL',unit:'pcs', pack:'packet', packQty:100, minBase:500,serial:true, col:'#0E7490'},
               {name:'Sleeves',  prefix:'SLV',unit:'m',   pack:'roll',   packQty:100, minPacks:2, col:'#6D28D9'},
               {name:'Pipes',    prefix:'PIP',unit:'m',   pack:'roll',   packQty:100, minPacks:2, col:'#12652F'},
@@ -1048,17 +1058,28 @@ const packName=(it,n)=>plural((it&&it.pack)||'pack',n);
 const unitName=(it,n)=>plural((it&&it.unit)||'pcs',n);
 const toBase=(it,packs)=>hasPack(it)?packs*packSize(it):packs;
 const toPacks=(it,base)=>hasPack(it)?base/packSize(it):base;
+/* When packs are tracked individually their sizes can differ, so the
+   pack count must be counted, never derived by division. */
+function openPacks(itCode){
+  const {byBatch}=stockMaps();
+  return DB.batches.filter(b=>b.code===itCode&&(byBatch[b.bcode]||0)>0).length;
+}
 /* "9,000 pcs · 3 rolls" */
 function qtyText(it,base){
   const b=fmt(base)+' '+unitName(it,base);
   if(!hasPack(it))return b;
   const p=toPacks(it,base);
-  const ptxt=fmt(Math.round(p*100)/100)+' '+packName(it,p);
+  let ptxt;
+  if(isSerial(it)){
+    const n=openPacks(it.code);
+    ptxt=fmt(n)+' '+packName(it,n);
+  } else ptxt=fmt(Math.round(p*100)/100)+' '+packName(it,p);
   return isWhole(it) ? ptxt+' · '+b : b+' · '+ptxt;
 }
 function packText(it){
   if(!hasPack(it))return '';
   return '1 '+it.pack+' = '+fmt(packSize(it))+' '+unitName(it,packSize(it))
+    +(isSerial(it)?' (usual)':'')
     +(isWhole(it)?' · whole '+packName(it,2)+' only':'')
     +(isSerial(it)?' · tracked individually':'');
 }
@@ -1221,6 +1242,21 @@ async function handleCode(raw){
   const enteredText = usePacks
     ? fmt(entered)+' '+packName(it,entered)+' ('+fmt(qty)+' '+unitName(it,qty)+')'
     : fmt(qty)+' '+unitName(it,qty);
+  /* A pack item scanned in Pieces mode is nearly always a mis-set toggle,
+     so say so before it becomes a stock error. */
+  if(hasPack(it)&&!usePacks&&mode!=='COUNT'){
+    beep(false);
+    show('bad',`<span class="tag err">Pieces, not ${esc(packName(it,2))}</span>
+      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+      <div class="rcd">${esc(code)} · ${esc(packText(it))}</div>
+      <div class="rcd" style="margin-top:8px">The quantity box is set to <b>Pieces</b>, so this would move
+        ${fmt(qty)} ${esc(unitName(it,qty))}, not ${fmt(entered)} ${esc(packName(it,entered))}.</div>
+      <div class="row mt"><button class="btn sm" id="fixMode">Switch to ${esc(packName(it,2))} and repeat</button></div>`);
+    $('#fixMode').onclick=()=>{ qtyMode='pack';
+      const bt=$('#qtyMode'); bt.dataset.mode='pack'; bt.textContent='Packs';
+      handleCode(code); };
+    return;
+  }
 
   if(mode==='COUNT'){
     if($('#scanQty').value===''){beep(false);toast('Type the counted quantity first',true);return;}
@@ -1272,10 +1308,12 @@ function askPack(code,it,b,onHand,left,dir){
   const full=b.qty0||packSize(it);
   PACKASK={code,it,b,onHand,left,dir,full};
   if(left<=0&&dir==='OUT'){
-    show('bad',`<span class="tag err">This ${esc(it.pack)} is empty</span>
+    beep(false); buzz(false);
+    show('bad',`<span class="tag err">Already issued — ${esc(it.pack)} is empty</span>
       <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
       <div class="rcd">${esc(code)}</div>
-      <div class="rcd" style="margin-top:8px">Nothing left inside. Take the sticker off and scan another ${esc(it.pack)}.</div>`);
+      <div class="rcd" style="margin-top:8px">This ${esc(it.pack)} has already gone out. Nothing left inside —
+        scan a different sticker. Every ${esc(it.pack)} has its own code, so this one cannot be issued twice.</div>`);
     return;
   }
   const pct=full>0?Math.max(0,Math.min(100,Math.round(left/full*100))):0;
@@ -1286,13 +1324,17 @@ function askPack(code,it,b,onHand,left,dir){
       <span class="un">${esc(unitName(it,left))} left of ${fmt(full)}</span></div>
     <div class="bar2"><i style="width:${pct}%"></i></div>
     <div class="rcd" style="margin-top:4px">${esc(qtyText(it,onHand))} across all ${esc(packName(it,2))}</div>
-    <div class="bigrow">
+    ${isWhole(it)
+      ? `<button class="big ${dir==='IN'?'in':'out'}" style="width:100%;margin-top:16px" id="pkAll">
+           ${dir==='IN'?'Put this '+esc(it.pack)+' back':'Issue the whole '+esc(it.pack)}
+           <small>${fmt(dir==='IN'?full-left:left)} ${esc(unitName(it,left))}</small></button>`
+      : `<div class="bigrow">
       <button class="big ${dir==='IN'?'in':'out'}" id="pkAll">${dir==='IN'?'Fill to full':'Take all '+fmt(left)}<small>${esc(unitName(it,left))}</small></button>
       <button class="big grey" id="pkPart">Enter a number<small>part of the ${esc(it.pack)}</small></button>
-    </div>
+    </div>`}
     <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="pkCancel">Cancel</button>`);
   $('#pkAll').onclick=()=>commitPack(dir==='IN'?(full-left):left);
-  $('#pkPart').onclick=()=>askPackQty();
+  if($('#pkPart')) $('#pkPart').onclick=()=>askPackQty();
   $('#pkCancel').onclick=()=>{PACKASK=null;show('','<p class="idle">Ready. Scan the next label.</p>');};
 }
 function askPackQty(){
@@ -1743,7 +1785,12 @@ function editItem(code){const it=item(code);if(!it)return;editing=it.code;
 /* ---------- new delivery ---------- */
 function delUnits(){
   const it=item($('#dItem').value); const sel=$('#dUnit');
-  if(!it){sel.innerHTML='';return;}
+  if(!it){sel.innerHTML='';$('#dPerHint').textContent='';return;}
+  const pw=$('#dPer').closest('label');
+  if(hasPack(it)){ pw.style.display='';
+    if(!numv($('#dPer').value)) $('#dPer').value=packSize(it);
+    $('#dPerLbl').textContent=(it.unit||'pcs')+' per '+it.pack;
+  } else { pw.style.display='none'; $('#dPer').value=0; }
   sel.innerHTML = (hasPack(it)?`<option value="pack">${esc(packName(it,2))}</option>`:'')
                 + (isWhole(it)?'':`<option value="base">${esc(it.unit)}</option>`);
   delPrev();
@@ -1751,20 +1798,30 @@ function delUnits(){
 function delPrev(){
   const it=item($('#dItem').value); if(!it){$('#dPrev').textContent='';return;}
   const n=numv($('#dQty').value);
-  const base=$('#dUnit').value==='pack'?toBase(it,n):n;
+  const per=hasPack(it)?(numv($('#dPer').value)||packSize(it)):0;
+  const base=($('#dUnit').value==='pack'&&per)?n*per:n;
+  if(hasPack(it)) $('#dPerHint').textContent =
+    per===packSize(it) ? 'Usual size for this item'
+    : 'Different from the usual '+fmt(packSize(it))+' — saved against these '+packName(it,2)+' only';
   $('#dPrev').textContent = n>0
-    ? ('Books in '+qtyText(it,base)) : (packText(it)||'');
+    ? ($('#dUnit').value==='pack'&&per
+        ? 'Books in '+fmt(n)+' '+packName(it,n)+' x '+fmt(per)+' = '+fmt(base)+' '+unitName(it,base)
+        : 'Books in '+fmt(base)+' '+unitName(it,base))
+    : (packText(it)||'');
   $('#dLbl').value = ($('#dUnit').value==='pack'&&n>0) ? Math.min(200,Math.ceil(n)) : $('#dLbl').value;
 }
 $('#dItem').onchange=()=>{const it=item($('#dItem').value);
   if(it&&!numv($('#dRate').value))$('#dRate').value=it.rate; delUnits();};
 $('#dQty').addEventListener('input',delPrev);
+$('#dPer').addEventListener('input',delPrev);
 $('#dUnit').addEventListener('change',delPrev);
 $('#saveDel').onclick=async()=>{
   const it=item($('#dItem').value);
   const typed=numv($('#dQty').value);
   const inPacks=$('#dUnit').value==='pack'&&hasPack(it);
-  const q=inPacks?toBase(it,typed):typed;
+  const per=hasPack(it)?(numv($('#dPer').value)||packSize(it)):0;
+  if(inPacks&&per<=0){toast('Enter how many are in one '+it.pack,true);$('#dPer').focus();return;}
+  const q=inPacks?typed*per:typed;
   if(!it){toast('Pick an item',true);return;}
   if(q<=0){toast('Enter the quantity received',true);$('#dQty').focus();return;}
   if(isWhole(it)&&typed%1!==0){toast(it.name+' comes in whole '+packName(it,2)+' — enter a whole number',true);$('#dQty').focus();return;}
@@ -1777,12 +1834,13 @@ $('#saveDel').onclick=async()=>{
     const n=Math.round(inPacks?typed:toPacks(it,q));
     if(n<1){toast('Enter how many '+packName(it,2)+' arrived',true);return;}
     if(n>200&&!confirm('Create '+n+' separate '+packName(it,n)+', each with its own code and label?'))return;
+    const sz=per||packSize(it);
     for(let k=0;k<n;k++){
-      const bb=Object.assign({bcode:nextBatchCode(it.code),code:it.code,qty0:packSize(it)},meta);
+      const bb=Object.assign({bcode:nextBatchCode(it.code),code:it.code,qty0:sz},meta);
       DB.batches.push(bb); made.push(bb);
       await pushBatch(bb);
       await pushMove({id:uid(),ts:nowISO(),bcode:bb.bcode,code:it.code,type:'IN',
-        qty:packSize(it),note:note,user:DB.settings.user||'—'});
+        qty:sz,note:note+' · '+fmt(sz)+' '+unitName(it,sz)+'/'+it.pack,user:DB.settings.user||'—'});
     }
     lastMove=null;
   }else{
@@ -1820,15 +1878,22 @@ function miniLabel(b,it,chk){
   const code=b?b.bcode:it.code;
   const packbit=hasPack(it)?(String(packSize(it))+' '+String(it.unit).toUpperCase()+'/'+it.pack.toUpperCase()):'';
   const meta=b?(b.lot?'LOT '+b.lot:(b.recv||'')):(packbit||(it.loc?'RACK '+it.loc:(it.unit||'')));
+  const thisSize=b&&b.qty0?b.qty0:packSize(it);
+  const packbit2=hasPack(it)?(String(thisSize)+' '+String(it.unit).toUpperCase()+'/'+it.pack.toUpperCase()):'';
+  const l2=b?(packbit2||(b.ven?String(b.ven).slice(0,14):(b.recv||''))):(packbit2||'');
+  const l3=it.loc?('RACK '+it.loc):(b&&b.lot?('LOT '+String(b.lot).slice(0,10)):'');
   return `<div class="minihold">
     ${chk?`<label class="lsel"><input type="checkbox" class="lchk" value="${esc(code)}" checked>print</label>`:''}
     <div class="label mini">
-      <div class="qr">${qrSVG(code)}</div>
-      <div class="side">
-        <div class="lnm">${esc(it.name)}</div>
-        <div class="lcode">${esc(code)}</div>
-        ${meta?`<div class="lmeta">${esc(meta)}</div>`:''}
+      <div class="mtop">
+        <div class="qr">${qrSVG(code)}</div>
+        <div class="side">
+          <div class="lnm">${esc(it.name)}</div>
+          ${l2?`<div class="lmeta">${esc(l2)}</div>`:''}
+          ${l3?`<div class="lmeta">${esc(l3)}</div>`:''}
+        </div>
       </div>
+      <div class="lcode">${esc(code)}</div>
     </div></div>`;
 }
 
@@ -1851,11 +1916,18 @@ function labelHTML(b,it,chk){
 }
 $('#lblKind').onchange=renderLabels;
 $('#lblWhen').onchange=renderLabels;
+if($('#dayNew')) $('#dayNew').onchange=renderLabels;
 $('#lblTarget').onchange=()=>{ if($('#lblTarget').value==='roll') $('#lblSize').value='mini'; renderLabels(); };
 
 /* @page cannot be switched with a class, so the rule is rewritten
    just before the print dialog opens. */
-function sheet(){ return DB.settings.sheet||(DB.settings.sheet={cols:4,w:25,h:15,gx:3,gy:3,mt:4,ml:4,pw:210,ph:297,skip:0}); }
+function sheet(){
+  const d={cols:4,w:22,h:15,gx:3,gy:3,mt:0,ml:0,pw:100,ph:15,skip:0,share:'TSC',rot:0};
+  const s=DB.settings.sheet||(DB.settings.sheet=Object.assign({},d));
+  /* fill gaps left by layouts saved under an older version */
+  for(const k in d) if(s[k]===undefined||s[k]===null||s[k]==='undefined') s[k]=d[k];
+  return s;
+}
 function loadSheet(){
   const s=sheet();
   [['shCols','cols'],['shW','w'],['shH','h'],['shGx','gx'],['shGy','gy'],
@@ -1869,6 +1941,9 @@ function sheetPrev(){
   const rows=Math.max(1,Math.floor((s.ph-s.mt+s.gy)/(s.h+s.gy)));
   const span=s.ml+perRow*s.w+(perRow-1)*s.gx;
   const over=span>s.pw;
+  if($('#phPrev')) $('#phPrev').textContent = (rows===1)
+    ? 'One row per page — correct for a roll'
+    : rows+' rows per page — only right for A4 label sheets';
   if($('#shPrev')) $('#shPrev').innerHTML = over
     ? '<b style="color:var(--error)">Too narrow: the row needs '+fmt(Math.round(span*10)/10)+' mm but the page is '+s.pw+' mm. Press Auto page width.</b>'
     : (perRow+' across x '+rows+' down = '+(perRow*rows)+' labels'
@@ -1969,12 +2044,24 @@ function labelsForBatches(list){
   list.forEach(b=>{const it=item(b.code); if(it) h+=labelHTML(b,it,false);});
   return h;
 }
+function pendingToday(){
+  const only=$('#dayNew')&&$('#dayNew').checked;
+  return todaysBatches().filter(b=>!only||!b.printed);
+}
+function markPrinted(list){
+  const t=nowISO();
+  list.forEach(b=>{ b.printed=t; });
+  persistLocal(); render();
+}
 $('#dayPrint').onclick=()=>{
-  const list=todaysBatches();
-  if(!list.length){toast('Nothing was booked in today',true);return;}
+  const all=todaysBatches();
+  const list=pendingToday();
+  if(!all.length){toast('Nothing was booked in today',true);return;}
+  if(!list.length){toast('All of today\'s labels are already printed — untick "Only unprinted" to repeat',true);return;}
   const cells=[];
   list.forEach(b=>{const it=item(b.code); if(it) cells.push(labelHTML(b,it,false));});
   printCells(cells);
+  markPrinted(list);
 };
 
 /* single entry point for every print job */
@@ -1988,12 +2075,13 @@ function printCells(cells){
   window.print();
 }
 $('#dayCsv').onclick=()=>{
-  const list=todaysBatches();
-  if(!list.length){toast('Nothing was booked in today',true);return;}
+  const list=pendingToday();
+  if(!list.length){toast('Nothing new to export',true);return;}
   const rows=list.map(b=>btRow(b.bcode,1)).filter(Boolean);
   /* fixed filename on purpose: BarTender keeps one saved connection to
      this path, so the daily job is overwrite then print. */
   download('labels.csv',csv([BT_HEAD,...rows]));
+  markPrinted(list);
   toast('Saved labels.csv — '+rows.length+' label'+(rows.length===1?'':'s'));
 };
 $('#lblSize').onchange=()=>{renderLabels();
@@ -2153,8 +2241,9 @@ function fitText(txt,font,availDots){
      is never the thing that gets cut when a name is long. */
 function tsplLabel(x0,b,it,labW,labH){
   const code=b?b.bcode:it.code;
-  const packbit=hasPack(it)?(String(packSize(it))+' '+String(it.unit).toUpperCase()+'/'+it.pack.toUpperCase()):'';
-  const meta=b?(b.lot?'LOT '+b.lot:(b.recv||'')):packbit;
+  const thisSize=b&&b.qty0?b.qty0:packSize(it);
+  const packbit=hasPack(it)?(String(thisSize)+' '+String(it.unit).toUpperCase()+'/'+it.pack.toUpperCase()):'';
+  const meta=packbit||(b?(b.lot?'LOT '+b.lot:(b.recv||'')):'');
   const rack=it.loc?('RACK '+it.loc):'';
   const padL=0.6, qrCell=4, qrMM=(21*qrCell)/DPMM;
   const textL=padL+qrMM+0.7;
@@ -2210,8 +2299,10 @@ function sendTSPL(list,tag){
   toast('Wrote '+list.length+' label'+(list.length===1?'':'s')+' as printer commands');
 }
 if($('#dayTspl')) $('#dayTspl').onclick=()=>{
-  const bs=todaysBatches();
+  const bs=pendingToday();
+  if(!bs.length){toast('Nothing new to send',true);return;}
   sendTSPL(bs.map(b=>({b,it:item(b.code)})).filter(x=>x.it),'today');
+  markPrinted(bs);
 };
 if($('#shTspl')) $('#shTspl').onclick=()=>{
   const picked=$$('.lchk').filter(c=>c.checked).map(c=>c.value);
@@ -2421,11 +2512,15 @@ function renderStock(){
       <td class="code">${esc(i.code)}</td>
       <td>${catDot(i.cat)}${esc(i.name)}${low?' <span class="pill">Reorder</span>':''}${hasPack(i)?'<div class="rcd" style="font-size:11px;opacity:.6">'+esc(packText(i))+'</div>':''}</td>
       <td class="num">${isWhole(i)
-          ? fmt(Math.round(toPacks(i,oh)*100)/100)+' <span style="opacity:.6">'+esc(packName(i,toPacks(i,oh)))+'</span>'
+          ? (isSerial(i)
+              ? fmt(openPacks(i.code))+' <span style="opacity:.6">'+esc(packName(i,openPacks(i.code)))+'</span>'
+              : fmt(Math.round(toPacks(i,oh)*100)/100)+' <span style="opacity:.6">'+esc(packName(i,toPacks(i,oh)))+'</span>')
           : fmt(oh)+' <span style="opacity:.6">'+esc(unitName(i,oh))+'</span>'}</td>
       <td class="num">${!hasPack(i) ? '—' : (isWhole(i)
           ? fmt(oh)+' <span style="opacity:.6">'+esc(unitName(i,oh))+'</span>'
-          : fmt(Math.round(toPacks(i,oh)*100)/100)+' <span style="opacity:.6">'+esc(packName(i,toPacks(i,oh)))+'</span>')}</td>
+          : (isSerial(i)
+              ? fmt(openPacks(i.code))+' <span style="opacity:.6">'+esc(packName(i,openPacks(i.code)))+'</span>'
+              : fmt(Math.round(toPacks(i,oh)*100)/100)+' <span style="opacity:.6">'+esc(packName(i,toPacks(i,oh)))+'</span>'))}</td>
       <td class="num">${fmt(i.min)}${hasPack(i)&&i.min>0?' <span style="opacity:.6">('+fmt(Math.round(toPacks(i,i.min)*100)/100)+')</span>':''}</td>
       <td class="num">${money(oh*i.rate)}</td>
       <td>${esc(i.loc||'—')}</td>
@@ -2479,15 +2574,22 @@ function renderLabels(){
   const kind=$('#lblKind').value, when=($('#lblWhen')||{value:'all'}).value;
   let html='';
   const n=todaysBatches().length;
-  if($('#dayCount')) $('#dayCount').textContent = n
-    ? n+' pack'+(n===1?'':'s')+' booked in today'
-    : 'Nothing booked in today yet';
+  if($('#dayCount')){
+    const pend=todaysBatches().filter(b=>!b.printed).length;
+    $('#dayCount').textContent = n
+      ? n+' booked in today · '+pend+' still to print'
+      : 'Nothing booked in today yet';
+  }
   if(kind==='batch'){
     const {byBatch}=stockMaps();
     let bs=DB.batches.slice().sort((a,b)=>(b.recv||'').localeCompare(a.recv||''));
     if(when==='today'){ const keep={}; todaysBatches().forEach(b=>keep[b.bcode]=1); bs=bs.filter(b=>keep[b.bcode]); }
     if(when==='open')  bs=bs.filter(b=>(byBatch[b.bcode]||0)>0);
-    html=bs.map(b=>{const it=item(b.code);return it?labelHTML(b,it,true):'';}).join('');
+    html=bs.map(b=>{const it=item(b.code);
+      if(!it)return '';
+      const h=labelHTML(b,it,true);
+      return b.printed ? h.replace('>print</label>','>print</label><span class="pill" style="align-self:flex-start;margin-bottom:4px;border:0;background:var(--sc-high);color:var(--on-surface-var)">printed</span>') : h;
+    }).join('');
     $('#eLbl').style.display=bs.length?'none':'';
   }else{
     const {byItem}=stockMaps();
