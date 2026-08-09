@@ -1212,6 +1212,45 @@ function setupLine(it){
   return bits.join(' · ');
 }
 
+/* ============================================================
+   SCAN ENGINE
+   One state machine for every scan. scanPlan() decides which
+   questions to ask and is pure — no DOM, no globals — so the
+   rules can be reasoned about in one place.
+   ============================================================ */
+
+/* which questions does this scan need? */
+function scanPlan(item,container,md,simpleMode){
+  const steps=[];
+  if(simpleMode) steps.push('dir');
+  const packed=hasPack(item), whole=isWhole(item);
+  if(container){
+    if(whole)       steps.push('whole');
+    else if(packed) steps.push('partOrAll');
+    else            steps.push('qty');
+    return {steps,unit:whole?'pack':'base',container:true};
+  }
+  if(whole)       steps.push('qty');
+  else if(packed) steps.push('unit','qty');
+  else            steps.push('qty');
+  return {steps,unit:whole?'pack':null,container:false};
+}
+const unitFactor=(it,u)=>u==='pack'?(packSize(it)||1):1;
+
+function checkMove(it,container,dir,unit,typed,availBase){
+  if(!(typed>0)) return {ok:false,why:'empty'};
+  if(unit==='pack'&&typed%1!==0) return {ok:false,why:'fraction'};
+  const base=typed*unitFactor(it,unit);
+  if(dir==='OUT'&&base>availBase) return {ok:false,why:'short',avail:availBase};
+  if(container&&dir==='IN'){
+    const cap=(+container.qty0)||packSize(it)||0;
+    if(cap&&availBase+base>cap) return {ok:false,why:'overfull',cap};
+  }
+  return {ok:true,base};
+}
+
+let SCAN=null;
+
 async function handleCode(raw){
   const code=String(raw||'').trim();
   if(!code)return;
@@ -1224,370 +1263,269 @@ async function handleCode(raw){
       <div class="rnm" style="margin-top:6px">Unknown code</div>
       <div class="rcd">${esc(code)}</div>
       <div class="row mt"><button class="btn blue sm" id="qa">Create an item with this code</button></div>`);
-    $('#qa').onclick=()=>{go('items');resetItemForm();$('#fCode').value=code;$('#fName').focus();};
+    $('#qa').onclick=()=>{closeScanModal();go('items');resetItemForm();$('#fCode').value=code;$('#fName').focus();};
     return;
   }
-
   const it=res.item, b=res.batch;
-  if(!it){ beep(false); show('bad','<span class="tag err">Broken link</span><div class="rcd">Batch '+esc(code)+' has no parent item.</div>'); return; }
-  const onHand=byItem[it.code]||0, bHand=b?(byBatch[b.bcode]||0):null;
+  if(!it){ beep(false);
+    show('bad','<span class="tag err">Broken link</span><div class="rcd">'+esc(code)+' has no parent item.</div>');
+    return; }
 
-  if(+DB.settings.simple){ beep(true); buzz(true); askDirection(code,it,b,onHand,bHand); return; }
+  const onHand=byItem[it.code]||0;
+  const avail = b ? (byBatch[b.bcode]||0) : onHand;
 
-  if(mode==='LOOK'){
-    beep(true);
-    const kids=DB.batches.filter(x=>x.code===it.code&&(byBatch[x.bcode]||0)>0);
-    show('info',`<span class="tag look">Look up</span>
-      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
-      <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}</div>
-      <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))}</span>
-        ${b?`<span class="un">· this batch ${fmt(bHand)}</span>`:''}</div>
-      <div class="rcd" style="margin-top:6px">${esc(setupLine(it))}</div>
-      <div class="rcd">reorder below ${esc(qtyText(it,it.min))} · ${money(onHand*it.rate)}</div>
-      ${isSerial(it)&&kids.length?`<div class="rcd" style="margin-top:8px">Open ${esc(packName(it,2))}: `
-        +kids.slice(0,10).map(x=>esc(x.bcode)+' ('+fmt(byBatch[x.bcode]||0)+')').join(' · ')
-        +(kids.length>10?' …':'')+`</div>`:''}`);
-    return;
-  }
+  if(mode==='LOOK'){ beep(true); return renderLook(code,it,b,onHand,avail,byBatch); }
 
-  /* A tracked pack always asks, because the answer depends on what is
-     left inside this particular pack — not on a mode set minutes ago. */
-  if(b && isSerial(it) && (mode==='IN'||mode==='OUT')){
-    beep(true); buzz(true); askPack(code,it,b,onHand,bHand,mode); return;
-  }
-  /* Quantity is always asked after the scan, never carried in from a box
-     that was filled minutes ago. */
-  if(mode==='IN'||mode==='OUT'){
-    beep(true); buzz(true); askUnit(code,it,b?bHand:onHand,mode,b); return;
-  }
   if(mode==='COUNT'){
-    beep(true); buzz(true); askCount(code,it,b?bHand:onHand,b); return;
+    beep(true);buzz(true);
+    SCAN={code,it,b,onHand,avail,dir:'ADJ',unit:'base',plan:{steps:['count']},i:0,buf:''};
+    return step();
   }
-  /* No pack configured: say so, instead of silently moving single units. */
-  if(!b && !hasPack(it) && (mode==='IN'||mode==='OUT') && it.pack && !packSize(it)){
-    beep(false);
-    show('bad',`<span class="tag err">Pack size missing</span>
+
+  /* a pack that is already empty cannot go out again */
+  if(b && mode==='OUT' && avail<=0){
+    beep(false);buzz(false);
+    show('bad',`<span class="tag err">Already issued</span>
       <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
       <div class="rcd">${esc(code)}</div>
-      <div class="rcd" style="margin-top:8px">This item is set to arrive in ${esc(it.pack)}s but nobody has said
-        how many ${esc(it.unit||'pcs')} are in one. Until that is filled in it can only move single ${esc(it.unit||'pcs')}.</div>
-      <div class="row mt"><button class="btn sm" id="fixPack">Set it now</button></div>`);
-    $('#fixPack').onclick=()=>editItem(it.code);
+      <div class="rcd" style="margin-top:8px">This ${esc(it.pack||'pack')} is empty. Every ${esc(it.pack||'pack')}
+        carries its own code, so it cannot be issued twice. Scan a different sticker.</div>`);
     return;
   }
 
+  const simple=!!+DB.settings.simple;
+  const dir = simple ? null : mode;
+  const plan = scanPlan(it,b,mode,simple);
+  beep(true);buzz(true);
+  SCAN={code,it,b,onHand,avail,dir,unit:plan.unit,plan,i:0,buf:''};
+  step();
 }
 
-/* ---------- packs or pieces, decided per scan ---------- */
-let UNITASK=null;
-function askUnit(code,it,onHand,dir,b){
-  UNITASK={code,it,onHand,dir,b:b||null};
-  const pn=packName(it,2), un=unitName(it,2);
-  if(!hasPack(it)){ askUnitQty(false); return; }   /* loose item: just a number */
-  if(isWhole(it)){ askUnitQty(true); return; }     /* rolls only */
-  show('info',`<span class="tag look">${esc(dir==='IN'?'Receiving':'Issuing')}</span>
+/* ---- run the plan ---- */
+function step(){
+  if(!SCAN)return;
+  const s=SCAN.plan.steps[SCAN.i];
+  if(!s) return commitScan();
+  if(s==='dir')       return renderDir();
+  if(s==='unit')      return renderUnit();
+  if(s==='whole')     return renderWhole();
+  if(s==='partOrAll') return renderPartOrAll();
+  if(s==='count')     return renderKeypad(true);
+  return renderKeypad(false);
+}
+const advance=()=>{ SCAN.i++; SCAN.buf=''; step(); };
+const backStep=()=>{ if(SCAN.i>0){SCAN.i--;SCAN.buf='';step();} else cancelScan(); };
+function cancelScan(){ SCAN=null; show('','<p class="idle">Ready. Scan the next label.</p>',true); }
+
+/* ---- shared header ---- */
+function scanHead(tagCls,tagTxt){
+  const {code,it,b,onHand,avail}=SCAN;
+  return `<span class="tag ${tagCls}">${esc(tagTxt)}</span>
     <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
-    <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}</div>
-    <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))} in store</span></div>
-    <div class="rcd">${esc(setupLine(it))}</div>
+    <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}${b&&b.ven?' · '+esc(b.ven):''}</div>
+    <div class="math"><span class="now">${fmt(avail)}</span>
+      <span class="un">${b?esc(unitName(it,avail))+' left in this '+esc(it.pack||'pack')
+                          :esc(qtyText(it,onHand))+' in store'}</span></div>
+    <div class="rcd" style="margin-top:4px">${esc(setupLine(it))}</div>`;
+}
+const btnBack=(id)=>`<button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="${id}">Back</button>`;
+
+/* ---- step 1: which direction (simple mode) ---- */
+function renderDir(){
+  const {it}=SCAN;
+  show('info',scanHead('look','Which way?')+`
     <div class="bigrow">
-      <button class="big ${dir==='IN'?'in':'out'}" id="uPack">Whole ${esc(pn)}<small>${fmt(packSize(it))} ${esc(un)} each</small></button>
-      <button class="big grey" id="uBase">Loose ${esc(un)}<small>type the number</small></button>
+      <button class="big in"  id="sDirIn">Came in<small>add to store</small></button>
+      <button class="big out" id="sDirOut">Went out<small>take from store</small></button>
     </div>
-    <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="uCancel">Cancel</button>`);
-  $('#uPack').onclick=()=>askUnitQty(true);
-  $('#uBase').onclick=()=>askUnitQty(false);
-  $('#uCancel').onclick=()=>{UNITASK=null;show('','<p class="idle">Ready. Scan the next label.</p>',true);};
-}
-function askUnitQty(inPacks){
-  if(!UNITASK)return;
-  const {it,onHand,dir,code}=UNITASK; let buf='';
-  const draw=()=>{
-    const v=buf===''?'0':buf, n=parseFloat(v)||0;
-    const base=inPacks?n*packSize(it):n;
-    const word=inPacks?packName(it,n):unitName(it,n);
-    const over=dir==='OUT'&&base>onHand;
-    show(over?'bad':(dir==='IN'?'ok':'info'),
-      `<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Receive':'Issue'} ${esc(inPacks?packName(it,2):unitName(it,2))}</span>
-       <div class="rnm" style="margin-top:5px">${esc(it.name)}</div>
-       <div class="rcd">${esc(code)} · ${esc(qtyText(it,onHand))} now</div>
-       <div class="qtybox">${esc(v)} <span style="font-size:15px;opacity:.6">${esc(word)}</span></div>
-       <div class="rcd" style="text-align:right;margin-top:6px">${over
-          ? 'Only '+fmt(onHand)+' '+unitName(it,onHand)+' in store'
-          : (inPacks&&n>0?'= '+fmt(base)+' '+unitName(it,base):'&nbsp;')}</div>
-       <div class="pad">
-         ${[1,2,3,4,5,6,7,8,9].map(k=>`<button data-k="${k}">${k}</button>`).join('')}
-         <button data-k=".">.</button><button data-k="0">0</button><button data-k="del">&#9003;</button>
-       </div>
-       <button class="confirm ${dir==='IN'?'in':'out'}" id="uOk" ${over||n<=0?'disabled':''}>${dir==='IN'?'Add':'Take'} ${esc(v)} ${esc(word)}</button>
-       <button class="big grey" style="width:100%;margin-top:8px;font-size:13px;padding:11px" id="uBack">Back</button>`);
-    $$('.pad button').forEach(bt=>bt.onclick=()=>{
-      const k=bt.dataset.k;
-      if(k==='del')buf=buf.slice(0,-1);
-      else if(k==='.'){ if(!inPacks&&!buf.includes('.'))buf=(buf||'0')+'.'; }
-      else buf=(buf==='0'?'':buf)+k;
-      if(buf.length>9)buf=buf.slice(0,9);
-      draw();
-    });
-    const ok=$('#uOk'); if(ok&&!ok.disabled) ok.onclick=()=>commitUnit(base,inPacks?n:null);
-    $('#uBack').onclick=()=>{ if(isWhole(it)){UNITASK=null;show('','<p class="idle">Ready. Scan the next label.</p>',true);}
-      else askUnit(code,it,onHand,dir); };
-  };
-  draw();
-}
-async function commitUnit(qty,packsTyped){
-  if(!UNITASK)return;
-  const {code,it,onHand,dir}=UNITASK;
-  if(!qty||qty<=0){beep(false);toast('Enter a number first',true);return;}
-  if(dir==='OUT'&&qty>onHand){beep(false);toast('Only '+fmt(onHand)+' '+unitName(it,onHand)+' in store',true);return;}
-  const said = packsTyped!=null
-    ? fmt(packsTyped)+' '+packName(it,packsTyped)+' ('+fmt(qty)+' '+unitName(it,qty)+')'
-    : fmt(qty)+' '+unitName(it,qty);
-  const bc=UNITASK.b?UNITASK.b.bcode:'';
-  const mv={id:uid(),ts:nowISO(),bcode:bc,code:it.code,type:dir,qty:qty,note:'',user:DB.settings.user||'—'};
-  await pushMove(mv); lastMove=mv; UNITASK=null;
-  const after=dir==='IN'?onHand+qty:onHand-qty;
-  const low=it.min>0&&after<=it.min;
-  beep(true); buzz(true);
-  show('ok',`<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Received':'Issued'} ${esc(said)}</span>
-    <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
-    <div class="math"><span class="was">${fmt(onHand)}</span><span class="now">${fmt(after)}</span>
-      <span class="un">${esc(qtyText(it,after))} left</span>${low?'<span class="pill">Reorder now</span>':''}</div>
-    ${undoBtn()}`);
-  wireUndo(); render();
+    <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="sCancel">Cancel</button>`);
+  $('#sDirIn').onclick =()=>{SCAN.dir='IN'; advance();};
+  $('#sDirOut').onclick=()=>{SCAN.dir='OUT';advance();};
+  $('#sCancel').onclick=cancelScan;
 }
 
-/* ---------- stocktake ---------- */
-function askCount(code,it,onHand,b){
-  let buf='';
-  const draw=()=>{
-    const v=buf===''?'0':buf, n=parseFloat(v)||0, diff=n-onHand;
-    show('info',`<span class="tag adj">Count</span>
-      <div class="rnm" style="margin-top:5px">${esc(it.name)}</div>
-      <div class="rcd">${esc(code)} · system says ${esc(qtyText(it,onHand))}</div>
-      <div class="qtybox">${esc(v)} <span style="font-size:15px;opacity:.6">${esc(unitName(it,n))}</span></div>
-      <div class="rcd" style="text-align:right;margin-top:6px">${buf===''?'&nbsp;':(diff===0?'Matches the system':(diff>0?'+':'')+fmt(diff)+' correction')}</div>
-      <div class="pad">
-        ${[1,2,3,4,5,6,7,8,9].map(k=>`<button data-k="${k}">${k}</button>`).join('')}
-        <button data-k=".">.</button><button data-k="0">0</button><button data-k="del">&#9003;</button>
-      </div>
-      <button class="confirm in" id="cOk" ${buf===''?'disabled':''}>Record count of ${esc(v)}</button>
-      <button class="big grey" style="width:100%;margin-top:8px;font-size:13px;padding:11px" id="cCancel">Cancel</button>`);
-    $$('.pad button').forEach(bt=>bt.onclick=()=>{
-      const k=bt.dataset.k;
-      if(k==='del')buf=buf.slice(0,-1);
-      else if(k==='.'){ if(!buf.includes('.'))buf=(buf||'0')+'.'; }
-      else buf=(buf==='0'?'':buf)+k;
-      if(buf.length>9)buf=buf.slice(0,9);
-      draw();
-    });
-    const ok=$('#cOk'); if(ok&&!ok.disabled) ok.onclick=async()=>{
-      const diff=(parseFloat(buf||'0'))-onHand;
-      if(diff===0){ beep(true);
-        show('ok',`<span class="tag adj">Count matches</span>
-          <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
-          <div class="rcd">${esc(code)} · nothing to correct</div>`); return; }
-      const mv={id:uid(),ts:nowISO(),bcode:b?b.bcode:'',code:it.code,type:'ADJ',qty:diff,
-        note:'Stocktake: system '+fmt(onHand)+' → counted '+fmt(parseFloat(buf)),user:DB.settings.user||'—'};
-      await pushMove(mv); lastMove=mv; beep(true); buzz(true);
-      show('ok',`<span class="tag adj">Stock corrected</span>
-        <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
-        <div class="math"><span class="was">${fmt(onHand)}</span><span class="now">${fmt(parseFloat(buf))}</span>
-          <span class="un">${esc(unitName(it,parseFloat(buf)))} (${diff>0?'+':''}${fmt(diff)})</span></div>
-        ${undoBtn()}`);
-      wireUndo(); render();
-    };
-    $('#cCancel').onclick=()=>show('','<p class="idle">Ready. Scan the next label.</p>',true);
-  };
-  draw();
+/* ---- step 2: packs or loose units ---- */
+function renderUnit(){
+  const {it,dir}=SCAN;
+  const pn=packName(it,2), un=unitName(it,2);
+  show('info',scanHead('look',dir==='IN'?'Receiving':'Issuing')+`
+    <div class="bigrow">
+      <button class="big ${dir==='IN'?'in':'out'}" id="sUPack">Whole ${esc(pn)}<small>${fmt(packSize(it))} ${esc(un)} each</small></button>
+      <button class="big grey" id="sUBase">Loose ${esc(un)}<small>type the number</small></button>
+    </div>`+btnBack('sUBack'));
+  $('#sUPack').onclick=()=>{SCAN.unit='pack'; advance();};
+  $('#sUBase').onclick=()=>{SCAN.unit='base'; advance();};
+  $('#sUBack').onclick=backStep;
 }
 
-/* ---------- a tracked pack ---------- */
-let PACKASK=null;
-function askPack(code,it,b,onHand,left,dir){
-  const full=b.qty0||packSize(it);
-  PACKASK={code,it,b,onHand,left,dir,full};
-  if(left<=0&&dir==='OUT'){
-    beep(false); buzz(false);
-    show('bad',`<span class="tag err">Already issued — ${esc(it.pack)} is empty</span>
-      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
-      <div class="rcd">${esc(code)}</div>
-      <div class="rcd" style="margin-top:8px">This ${esc(it.pack)} has already gone out. Nothing left inside —
-        scan a different sticker. Every ${esc(it.pack)} has its own code, so this one cannot be issued twice.</div>`);
-    return;
-  }
-  const pct=full>0?Math.max(0,Math.min(100,Math.round(left/full*100))):0;
-  show('info',`<span class="tag look">${esc(dir==='IN'?'Put back into':'Take from')} this ${esc(it.pack)}</span>
-    <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
-    <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}${b.ven?' · '+esc(b.ven):''}</div>
-    <div class="math"><span class="now">${fmt(left)}</span>
-      <span class="un">${esc(unitName(it,left))} left of ${fmt(full)}</span></div>
+/* ---- a whole-pack container: one button, no keypad ---- */
+function renderWhole(){
+  const {it,avail,dir,b}=SCAN;
+  const cap=(+b.qty0)||packSize(it);
+  const amount = dir==='IN' ? cap-avail : avail;
+  show(dir==='IN'?'ok':'info',scanHead(dir==='IN'?'in':'out',
+      dir==='IN'?('Put this '+(it.pack||'pack')+' back'):('Issue this '+(it.pack||'pack')))+`
+    <button class="big ${dir==='IN'?'in':'out'}" style="width:100%;margin-top:16px" id="sWhole">
+      ${dir==='IN'?'Put back':'Issue'} the whole ${esc(it.pack||'pack')}
+      <small>${fmt(amount)} ${esc(unitName(it,amount))}</small></button>`+btnBack('sWBack'));
+  $('#sWhole').onclick=()=>{SCAN.unit='base'; SCAN.buf=String(amount); commitScan(); };
+  $('#sWBack').onclick=backStep;
+}
+
+/* ---- a part-usable container: all of it, or type a number ---- */
+function renderPartOrAll(){
+  const {it,avail,dir,b}=SCAN;
+  const cap=(+b.qty0)||packSize(it);
+  const amount = dir==='IN' ? cap-avail : avail;
+  const pct = cap>0 ? Math.max(0,Math.min(100,Math.round(avail/cap*100))) : 0;
+  show(dir==='IN'?'ok':'info',scanHead(dir==='IN'?'in':'out',
+      dir==='IN'?('Into this '+(it.pack||'pack')):('From this '+(it.pack||'pack')))+`
     <div class="bar2"><i style="width:${pct}%"></i></div>
-    <div class="rcd" style="margin-top:4px">${esc(qtyText(it,onHand))} across all ${esc(packName(it,2))}</div>
-    ${isWhole(it)
-      ? `<button class="big ${dir==='IN'?'in':'out'}" style="width:100%;margin-top:16px" id="pkAll">
-           ${dir==='IN'?'Put this '+esc(it.pack)+' back':'Issue the whole '+esc(it.pack)}
-           <small>${fmt(dir==='IN'?full-left:left)} ${esc(unitName(it,left))}</small></button>`
-      : `<div class="bigrow">
-      <button class="big ${dir==='IN'?'in':'out'}" id="pkAll">${dir==='IN'?'Fill to full':'Take all '+fmt(left)}<small>${esc(unitName(it,left))}</small></button>
-      <button class="big grey" id="pkPart">Enter a number<small>part of the ${esc(it.pack)}</small></button>
-    </div>`}
-    <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="pkCancel">Cancel</button>`);
-  $('#pkAll').onclick=()=>commitPack(dir==='IN'?(full-left):left);
-  if($('#pkPart')) $('#pkPart').onclick=()=>askPackQty();
-  $('#pkCancel').onclick=()=>{PACKASK=null;show('','<p class="idle">Ready. Scan the next label.</p>',true);};
+    <div class="bigrow">
+      <button class="big ${dir==='IN'?'in':'out'}" id="sPAll">${dir==='IN'?'Fill to full':'Take all'}<small>${fmt(amount)} ${esc(unitName(it,amount))}</small></button>
+      <button class="big grey" id="sPPart">Type a number<small>part of the ${esc(it.pack||'pack')}</small></button>
+    </div>`+btnBack('sPBack'));
+  $('#sPAll').onclick =()=>{SCAN.unit='base'; SCAN.buf=String(amount); commitScan();};
+  $('#sPPart').onclick=()=>{SCAN.unit='base'; SCAN.plan.steps[SCAN.i]='qty'; step();};
+  $('#sPBack').onclick=backStep;
 }
-function askPackQty(){
-  if(!PACKASK)return;
-  const {it,b,left,dir,full}=PACKASK;
-  const cap = dir==='OUT' ? left : (full-left);
-  let buf='';
-  const draw=()=>{
-    const v=buf===''?'0':buf, n=parseFloat(v)||0;
-    const over=n>cap;
-    show(over?'bad':(dir==='IN'?'ok':'info'),
-      `<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Put back':'Take out'}</span>
-       <div class="rnm" style="margin-top:5px">${esc(it.name)}</div>
-       <div class="rcd">${esc(PACKASK.code)} · ${fmt(left)} ${esc(unitName(it,left))} inside</div>
-       <div class="qtybox">${esc(v)} <span style="font-size:15px;opacity:.6">${esc(unitName(it,n))}</span></div>
-       <div class="rcd" style="text-align:right;margin-top:6px">${over
-          ? 'Only '+fmt(cap)+' '+unitName(it,cap)+' possible'
-          : 'Leaves '+fmt(dir==='OUT'?left-n:left+n)+' '+unitName(it,1)+' in this '+esc(it.pack)}</div>
-       <div class="pad">
-         ${[1,2,3,4,5,6,7,8,9].map(k=>`<button data-k="${k}">${k}</button>`).join('')}
-         <button data-k=".">.</button><button data-k="0">0</button><button data-k="del">&#9003;</button>
-       </div>
-       <button class="confirm ${dir==='IN'?'in':'out'}" id="pkOk" ${over||n<=0?'disabled':''}>${dir==='IN'?'Put back':'Take'} ${esc(v)} ${esc(unitName(it,n))}</button>
-       <button class="big grey" style="width:100%;margin-top:8px;font-size:13px;padding:11px" id="pkBack">Back</button>`);
-    $$('.pad button').forEach(bt=>bt.onclick=()=>{
-      const k=bt.dataset.k;
-      if(k==='del')buf=buf.slice(0,-1);
-      else if(k==='.'){if(!buf.includes('.'))buf=(buf||'0')+'.';}
-      else buf=(buf==='0'?'':buf)+k;
-      if(buf.length>9)buf=buf.slice(0,9);
-      draw();
-    });
-    const ok=$('#pkOk'); if(ok&&!ok.disabled) ok.onclick=()=>commitPack(parseFloat(buf||'0'));
-    $('#pkBack').onclick=()=>askPack(PACKASK.code,it,b,PACKASK.onHand,left,dir);
-  };
-  draw();
+
+/* ---- keypad ---- */
+function renderKeypad(isCount){
+  const {it,avail,dir,unit,b}=SCAN;
+  const u=unit||'base';
+  const v=SCAN.buf===''?'0':SCAN.buf, n=parseFloat(v)||0;
+  const word = u==='pack' ? packName(it,n) : unitName(it,n);
+  const base = n*unitFactor(it,u);
+  let note='&nbsp;', bad=false;
+  if(isCount){
+    const d=n-avail;
+    note = SCAN.buf===''?'&nbsp;':(d===0?'Matches the system':(d>0?'+':'')+fmt(d)+' correction');
+  } else {
+    const chk=checkMove(it,b,dir,u,n,avail);
+    if(!chk.ok&&chk.why==='short'){ note='Only '+fmt(avail)+' '+unitName(it,avail)+' available'; bad=true; }
+    else if(!chk.ok&&chk.why==='fraction'){ note='Whole '+packName(it,2)+' only'; bad=true; }
+    else if(!chk.ok&&chk.why==='overfull'){ note='That '+(it.pack||'pack')+' only holds '+fmt(chk.cap); bad=true; }
+    else if(u==='pack'&&n>0) note='= '+fmt(base)+' '+unitName(it,base);
+  }
+  const label = isCount ? ('Record count of '+v)
+              : (dir==='IN'?'Add ':'Take ')+v+' '+word;
+  show(bad?'bad':(isCount?'info':(dir==='IN'?'ok':'info')),
+    scanHead(isCount?'adj':(dir==='IN'?'in':'out'),
+      isCount?'Stocktake':(dir==='IN'?'Receive':'Issue'))+`
+    <div class="qtybox">${esc(v)} <span style="font-size:15px;opacity:.6">${esc(word)}</span></div>
+    <div class="rcd" style="text-align:right;margin-top:6px">${note}</div>
+    <div class="pad">
+      ${[1,2,3,4,5,6,7,8,9].map(k=>`<button data-k="${k}">${k}</button>`).join('')}
+      <button data-k="." ${u==='pack'?'disabled style="opacity:.35"':''}>.</button>
+      <button data-k="0">0</button><button data-k="del">&#9003;</button>
+    </div>
+    <button class="confirm ${dir==='IN'||isCount?'in':'out'}" id="sOk" ${(n<=0&&!isCount)||bad||SCAN.buf===''?'disabled':''}>${esc(label)}</button>`
+    +btnBack('sKBack'));
+  $$('.pad button').forEach(bt=>bt.onclick=()=>{
+    const k=bt.dataset.k;
+    if(k==='del') SCAN.buf=SCAN.buf.slice(0,-1);
+    else if(k==='.'){ if(u!=='pack'&&!SCAN.buf.includes('.')) SCAN.buf=(SCAN.buf||'0')+'.'; }
+    else SCAN.buf=(SCAN.buf==='0'?'':SCAN.buf)+k;
+    if(SCAN.buf.length>9) SCAN.buf=SCAN.buf.slice(0,9);
+    renderKeypad(isCount);
+  });
+  const ok=$('#sOk'); if(ok&&!ok.disabled) ok.onclick=()=>commitScan(isCount);
+  $('#sKBack').onclick=backStep;
 }
-async function commitPack(qty){
-  if(!PACKASK)return;
-  const {code,it,b,onHand,left,dir,full}=PACKASK;
-  const cap = dir==='OUT' ? left : (full-left);
-  if(!qty||qty<=0){beep(false);toast('Enter a number first',true);return;}
-  if(qty>cap){beep(false);toast('Only '+fmt(cap)+' '+unitName(it,cap)+' possible',true);return;}
-  const mv={id:uid(),ts:nowISO(),bcode:b.bcode,code:it.code,type:dir,qty:qty,
-    note:(dir==='OUT'?'From ':'Into ')+it.pack+' '+b.bcode,user:DB.settings.user||'—'};
-  await pushMove(mv); lastMove=mv; PACKASK=null;
-  const nowLeft = dir==='OUT' ? left-qty : left+qty;
-  const nowTotal= dir==='OUT' ? onHand-qty : onHand+qty;
-  const empty=nowLeft<=0;
-  const low=it.min>0&&nowTotal<=it.min;
-  beep(true); buzz(true);
+
+/* ---- commit ---- */
+async function commitScan(isCount){
+  if(!SCAN)return;
+  const {code,it,b,onHand,avail,dir,unit}=SCAN;
+  const typed=parseFloat(SCAN.buf||'0')||0;
+  const u=unit||'base';
+
+  if(isCount){
+    const diff=typed-avail;
+    SCAN=null;
+    if(diff===0){ beep(true);
+      return show('ok',`<span class="tag adj">Count matches</span>
+        <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
+        <div class="rcd">${esc(code)} · nothing to correct</div>`); }
+    await pushMove({id:uid(),ts:nowISO(),bcode:b?b.bcode:'',code:it.code,type:'ADJ',qty:diff,
+      note:'Stocktake: system '+fmt(avail)+' → counted '+fmt(typed),user:DB.settings.user||'—'});
+    lastMove=DB.moves[0]; beep(true);buzz(true);
+    show('ok',`<span class="tag adj">Stock corrected</span>
+      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
+      <div class="math"><span class="was">${fmt(avail)}</span><span class="now">${fmt(typed)}</span>
+        <span class="un">${esc(unitName(it,typed))} (${diff>0?'+':''}${fmt(diff)})</span></div>
+      ${undoBtn()}`);
+    wireUndo(); render(); return;
+  }
+
+  const chk=checkMove(it,b,dir,u,typed,avail);
+  if(!chk.ok){
+    beep(false);buzz(false);
+    const why = chk.why==='short'    ? 'Only '+fmt(avail)+' '+unitName(it,avail)+' available'
+              : chk.why==='fraction' ? 'Whole '+packName(it,2)+' only'
+              : chk.why==='overfull' ? 'That '+(it.pack||'pack')+' only holds '+fmt(chk.cap)
+              : 'Enter a number first';
+    toast(why,true); return;
+  }
+  const said = u==='pack'
+    ? fmt(typed)+' '+packName(it,typed)+' ('+fmt(chk.base)+' '+unitName(it,chk.base)+')'
+    : fmt(chk.base)+' '+unitName(it,chk.base);
+  const bc=b?b.bcode:'';
+  await pushMove({id:uid(),ts:nowISO(),bcode:bc,code:it.code,type:dir,qty:chk.base,
+    note:b?((dir==='OUT'?'From ':'Into ')+(it.pack||'pack')+' '+bc):'',user:DB.settings.user||'—'});
+  lastMove=DB.moves[0];
+  const wasHere=avail, nowHere = dir==='IN'?avail+chk.base:avail-chk.base;
+  const nowTotal = dir==='IN'?onHand+chk.base:onHand-chk.base;
+  const low = it.min>0 && nowTotal<=it.min;
+  const empty = b && nowHere<=0;
+  SCAN=null; beep(true);buzz(true);
   show(empty?'bad':'ok',
-    `<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Put back':'Taken'} ${fmt(qty)} ${esc(unitName(it,qty))}</span>
+    `<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Received':'Issued'} ${esc(said)}</span>
      <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
-     <div class="rcd">${esc(code)}</div>
-     <div class="math"><span class="was">${fmt(left)}</span><span class="now">${fmt(nowLeft)}</span>
-       <span class="un">${esc(unitName(it,nowLeft))} left in this ${esc(it.pack)}</span></div>
-     ${empty?`<div class="rcd" style="margin-top:8px"><b>This ${esc(it.pack)} is finished.</b> Take the sticker off before you throw it away.</div>`:''}
-     <div class="rcd" style="margin-top:6px">${esc(qtyText(it,nowTotal))} in store${low?' — reorder now':''}</div>
+     <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}</div>
+     <div class="math"><span class="was">${fmt(wasHere)}</span><span class="now">${fmt(nowHere)}</span>
+       <span class="un">${b?esc(unitName(it,nowHere))+' left in this '+esc(it.pack||'pack')
+                           :esc(qtyText(it,nowTotal))+' left'}</span>
+       ${low?'<span class="pill">Reorder now</span>':''}</div>
+     ${empty?`<div class="rcd" style="margin-top:8px"><b>This ${esc(it.pack||'pack')} is finished.</b>
+        Take the sticker off before throwing it away.</div>`:''}
+     ${b?`<div class="rcd" style="margin-top:6px">${esc(qtyText(it,nowTotal))} in store</div>`:''}
+     ${remainingList(it)}
      ${undoBtn()}`);
   wireUndo(); render();
 }
 
-/* ---------- simple mode: ask direction, then quantity ---------- */
-let ASK=null;
-function askDirection(code,it,b,onHand,bHand){
-  ASK={code,it,b,onHand,bHand};
-  show('info',`<div class="rnm">${esc(it.name)}</div>
+/* Which packs are still on the rack, oldest first — the one to open next.
+   Shown after a movement and on look-up, so nobody has to go hunting. */
+function remainingList(it,label){
+  if(!isSerial(it)) return '';
+  const {byBatch}=stockMaps();
+  const open=DB.batches.filter(x=>x.code===it.code&&(byBatch[x.bcode]||0)>0)
+    .sort((a,b)=>String(a.recv||'').localeCompare(String(b.recv||'')));
+  if(!open.length) return `<div class="rcd" style="margin-top:10px"><b>No ${esc(packName(it,2))} left on the rack.</b></div>`;
+  const rows=open.slice(0,8).map(x=>{
+    const d=x.recv?new Date(x.recv+'T00:00:00').toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}):'—';
+    return `<tr><td class="code" style="padding:4px 8px 4px 0">${esc(x.bcode)}</td>
+      <td class="num" style="padding:4px 8px">${fmt(byBatch[x.bcode]||0)} ${esc(unitName(it,byBatch[x.bcode]||0))}</td>
+      <td style="padding:4px 0;opacity:.75">${esc(d)}${x.ven?' · '+esc(String(x.ven).slice(0,12)):''}</td></tr>`;
+  }).join('');
+  return `<div class="rcd" style="margin-top:12px;font-weight:600">${open.length} ${esc(packName(it,open.length))} ${esc(label||'left')} — oldest first</div>
+    <table style="width:100%;font-size:12.5px;margin-top:4px">${rows}</table>
+    ${open.length>8?`<div class="rcd" style="opacity:.7">…and ${open.length-8} more</div>`:''}`;
+}
+
+/* ---- look up ---- */
+function renderLook(code,it,b,onHand,avail,byBatch){
+  const kids=DB.batches.filter(x=>x.code===it.code&&(byBatch[x.bcode]||0)>0);
+  show('info',`<span class="tag look">Look up</span>
+    <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
     <div class="rcd">${esc(code)}${it.loc?' · RACK '+esc(it.loc):''}</div>
-    <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))} in store</span></div>
-    <div class="rcd">${esc(setupLine(it))}</div>
-    <div class="bigrow">
-      <button class="big in"  id="askIn">Came in<small>Add to store</small></button>
-      <button class="big out" id="askOut">Went out<small>Take from store</small></button>
-    </div>
-    <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="askCancel">Cancel</button>`);
-  const go=(dir)=>{
-    if(b && isSerial(it)){ askPack(code,it,b,onHand,(bHand==null?onHand:bHand),dir); return; }
-    if(hasPack(it)){ askUnit(code,it,onHand,dir); return; }
-    askQty(dir);
-  };
-  $('#askIn').onclick=()=>go('IN');
-  $('#askOut').onclick=()=>go('OUT');
-  $('#askCancel').onclick=()=>{ASK=null;show('','<p class="idle">Ready. Scan the next label.</p>',true);};
-}
-function askQty(dir){
-  if(!ASK)return;
-  const {it,onHand}=ASK; let buf='';
-  let useP=hasPack(it);
-  const lockP=isWhole(it);
-  const draw=()=>{
-    const v=buf===''?'0':buf;
-    const n=parseFloat(v)||0;
-    const base=useP?toBase(it,n):n;
-    const unitWord=useP?packName(it,n):it.unit;
-    show(dir==='IN'?'ok':'bad',
-      `<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Came in':'Went out'}</span>
-       <div class="rnm" style="margin-top:5px">${esc(it.name)}</div>
-       <div class="rcd">Now in store: ${fmt(onHand)} ${esc(it.unit)}</div>
-       ${hasPack(it)&&!lockP?`<div class="unitsw">
-          <button data-u="pack" aria-pressed="${String(useP)}">${esc(packName(it,2))}</button>
-          <button data-u="base" aria-pressed="${String(!useP)}">${esc(it.unit)}</button>
-        </div>`:''}
-       <div class="qtybox">${esc(v)} <span style="font-size:15px;opacity:.6">${esc(unitWord)}</span></div>
-       ${useP&&n>0?`<div class="rcd" style="text-align:right;margin-top:6px">= ${fmt(base)} ${esc(it.unit)}</div>`:''}
-       <div class="pad">
-         ${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-k="${n}">${n}</button>`).join('')}
-         <button data-k=".">.</button><button data-k="0">0</button><button data-k="del">&#9003;</button>
-       </div>
-       <button class="confirm ${dir==='IN'?'in':'out'}" id="ok">${dir==='IN'?'Add':'Take'} ${esc(v)} ${esc(unitWord)}</button>
-       <button class="big grey" style="width:100%;margin-top:8px;font-size:13px;padding:11px" id="back">Back</button>`);
-    $$('.pad button').forEach(bt=>bt.onclick=()=>{
-      const k=bt.dataset.k;
-      if(k==='del') buf=buf.slice(0,-1);
-      else if(k==='.'){ if(!buf.includes('.')) buf=(buf||'0')+'.'; }
-      else buf=(buf==='0'?'':buf)+k;
-      if(buf.length>9)buf=buf.slice(0,9);
-      draw();
-    });
-    $$('.unitsw button').forEach(bt=>bt.onclick=()=>{useP=bt.dataset.u==='pack';draw();});
-    if(lockP){const dot=$$('.pad button').find(x=>x.dataset.k==='.'); if(dot){dot.disabled=true;dot.style.opacity='.3';}}
-    $('#ok').onclick=()=>{const n=parseFloat(buf||'0');commitSimple(dir,useP?toBase(it,n):n,useP?n:null);};
-    $('#back').onclick=()=>askDirection(ASK.code,ASK.it,ASK.b,ASK.onHand);
-  };
-  draw();
-}
-async function commitSimple(dir,qty,packsTyped){
-  if(!ASK)return;
-  const {code,it,b,onHand}=ASK;
-  if(!qty||qty<=0){beep(false);toast('Type a quantity first',true);return;}
-  const said = packsTyped!=null
-    ? fmt(packsTyped)+' '+packName(it,packsTyped)+' ('+fmt(qty)+' '+it.unit+')'
-    : fmt(qty)+' '+it.unit;
-  if(dir==='OUT'&&qty>onHand){
-    beep(false);buzz(false);
-    show('bad',`<span class="tag err">Not enough in store</span>
-      <div class="rnm" style="margin-top:5px">${esc(it.name)}</div>
-      <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))} available · asked for ${esc(said)}</span></div>
-      <button class="big grey" style="width:100%;margin-top:10px;font-size:14px;padding:12px" id="rt">Try again</button>`);
-    $('#rt').onclick=()=>askQty('OUT'); return;
-  }
-  const mv={id:uid(),ts:nowISO(),bcode:b?b.bcode:'',code:it.code,type:dir,qty:qty,note:'',user:DB.settings.user||'—'};
-  await pushMove(mv); lastMove=mv; ASK=null;
-  const after=dir==='IN'?onHand+qty:onHand-qty;
-  const low=it.min>0&&after<=it.min;
-  beep(true);buzz(true);
-  show('ok',`<span class="tag ${dir==='IN'?'in':'out'}">${dir==='IN'?'Added':'Taken'} ${esc(said)}</span>
-    <div class="rnm" style="margin-top:6px">${esc(it.name)}</div><div class="rcd">${esc(code)}</div>
-    <div class="math"><span class="was">${fmt(onHand)}</span>
-      <span class="now">${fmt(after)}</span>
-      <span class="un">${esc(qtyText(it,after))} left</span>${low?'<span class="pill">Order more</span>':''}</div>
-    ${undoBtn()}`);
-  wireUndo(); render();
+    <div class="math"><span class="now">${fmt(onHand)}</span><span class="un">${esc(qtyText(it,onHand))}</span>
+      ${b?`<span class="un">· this ${esc(it.pack||'pack')} holds ${fmt(avail)}</span>`:''}</div>
+    <div class="rcd" style="margin-top:4px">${esc(setupLine(it))}</div>
+    <div class="rcd" style="margin-top:6px">reorder below ${esc(qtyText(it,it.min))} · ${money(onHand*it.rate)}</div>
+    ${remainingList(it,'on the rack')}`);
 }
 
 const undoBtn=()=>`<div class="row mt"><button class="btn ghost sm" id="undoBtn">Undo this</button></div>`;
@@ -2534,7 +2472,7 @@ $('#clrMove').onclick=async()=>{
   if(!confirm('Clear '+DB.moves.length+' movements and '+DB.batches.length+' packs?\n\n'
     +DB.items.length+' items, your category rules and settings are kept.\nEvery stock figure will go to zero.'))return;
   if(!confirm('Last check — have you downloaded a backup?\n\nThis cannot be undone.'))return;
-  DB.moves=[]; DB.batches=[]; lastMove=null; ASK=null; PACKASK=null;
+  DB.moves=[]; DB.batches=[]; lastMove=null; SCAN=null;
   persistLocal(); render();
   show('','<p class="idle">Ready. Stock is at zero — scan or book in your real opening quantities.</p>',true);
   toast('Cleared. Items kept, stock at zero');
@@ -2544,7 +2482,7 @@ $('#clrAll').onclick=async()=>{
   if(!confirm('Last check — download a backup first if you have not.\n\nErase now?'))return;
   const keep=Object.assign({},DB.settings);
   DB={items:[],batches:[],moves:[],seq:1,settings:keep};
-  lastMove=null; ASK=null; PACKASK=null;
+  lastMove=null; SCAN=null;
   persistLocal(); render();
   show('','<p class="idle">Cleared. Add your items to begin.</p>',true);
   toast('Everything cleared on this device');
