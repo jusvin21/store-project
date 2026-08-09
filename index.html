@@ -387,6 +387,13 @@ body.simple .modes,body.simple #scanQty{display:none}
 @media print{
   body{background:#fff}
   body::before,.brandrule{display:none!important}
+  /* one label per page, edge to edge — for a die-cut roll */
+  body.roll #printArea{padding:0!important}
+  body.roll .labelgrid,body.roll .labelgrid.minigrid{display:block!important;gap:0!important}
+  body.roll .minihold{display:block;page-break-after:always;break-after:page}
+  body.roll .minihold:last-child{page-break-after:auto;break-after:auto}
+  body.roll .label,body.roll .label.mini{border:0!important;margin:0!important}
+  body.roll.outline .label.mini{border:0.2mm dashed #000!important}
   .wrap,#toast,#tip,#botNav,#sheet,#sheetBg{display:none!important}
   #printArea{display:block!important;padding:4mm}
   .labelgrid{grid-template-columns:repeat(3,1fr);gap:3mm}
@@ -567,12 +574,32 @@ body.simple .modes,body.simple #scanQty{display:none}
   <div class="card">
     <div class="row spread" style="margin-bottom:10px">
       <div class="row">
-        <select id="lblKind" class="txt"><option value="item">Item / rack labels</option><option value="batch">Batch labels</option></select>
+        <select id="lblKind" class="txt"><option value="item">Item / rack labels</option><option value="batch">Pack &amp; batch labels</option></select>
+        <select id="lblTarget" class="txt"
+          data-tip="Where it prints|Label roll sets the page to one 25x15 mm label. A4 sheet lays out 4 across on ordinary paper.">
+          <option value="roll">Label roll — one per label</option>
+          <option value="sheet">A4 sheet — 4 across</option>
+        </select>
+        <label class="lsel"><input type="checkbox" id="lblOutline"> Outline</label>
+        <select id="lblWhen" class="txt"
+          data-tip="Narrow the list|Today shows only what you booked in today — the labels you actually need to stick on this morning's delivery.">
+          <option value="all">Everything</option>
+          <option value="today">Booked in today</option>
+          <option value="open">Still has stock</option>
+        </select>
         <select id="lblSize" class="txt"><option value="mini">25 × 15 mm — QR only</option><option value="big">Large — QR + barcode</option></select>
         <button class="btn ghost sm" id="lAll">All</button><button class="btn ghost sm" id="lNone">None</button>
         <label class="lsel">Copies <input id="lCopies" type="number" min="1" max="200" value="1" class="txt" style="width:66px;font-family:var(--mono);text-align:right"></label>
       </div>
       <button class="btn" id="lPrint" data-tip="Print labels|Uses the browser. For thermal labels, export to BarTender instead.">Print</button>
+    </div>
+    <div class="row" style="margin:0 0 12px;padding:12px 14px;background:var(--primary-container);border-radius:12px">
+      <span style="font-weight:500;color:var(--on-primary-container)">Today's delivery</span>
+      <button class="btn sm" id="dayPrint"
+        data-tip="One tap|Selects everything booked in today and opens the print dialog.">Print today's labels</button>
+      <button class="btn ghost sm" id="dayCsv"
+        data-tip="Daily file for BarTender|Always saves as labels.csv. Point BarTender at that one path once, and every day you just overwrite it and press print.">Save labels.csv for BarTender</button>
+      <span class="hint" id="dayCount" style="margin-left:auto"></span>
     </div>
     <div class="labelgrid" id="lGrid"></div>
     <div class="empty" id="eLbl" style="display:none">Nothing to print yet.</div>
@@ -687,6 +714,22 @@ body.simple .modes,body.simple #scanQty{display:none}
         <option value="1">Simple — ask me after each scan</option></select></label>
     </div>
     <div class="row mt"><button class="btn ghost" id="saveSet">Save settings</button></div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">Clear test data / go live</h2>
+    <p class="hint" style="margin:0 0 12px">Stock is calculated from the movement log, so clearing the log sets every
+      quantity to zero. Use this once, when you finish testing and start counting for real.</p>
+    <div class="stats" style="margin-bottom:14px">
+      <div class="stat"><div class="k">Items</div><div class="v" id="clrItems">0</div></div>
+      <div class="stat"><div class="k">Packs / batches</div><div class="v" id="clrBatch">0</div></div>
+      <div class="stat"><div class="k">Movements</div><div class="v" id="clrMoves">0</div></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="clrMove" data-tip="Keep the item list, clear the history|Items, category rules and settings stay. All movements and packs go, so every stock figure returns to zero and you can count in your real opening stock.">Clear movements only</button>
+      <button class="btn red" id="clrAll" data-tip="Full reset|Removes items, rules, packs and movements from this device.">Clear everything</button>
+    </div>
+    <p class="hint mt" id="clrCloud" style="display:none"></p>
   </div>
 
   <div class="card">
@@ -1705,7 +1748,7 @@ $('#saveDel').onclick=async()=>{
     if(made.length>1) h=made.map(x=>labelHTML(x,it,false)).join('');
     else for(let i=0;i<Math.max(1,copies);i++)h+=labelHTML(b,it,false);
     $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
-    $('#printGrid').innerHTML=h;window.print();};
+    $('#printGrid').innerHTML=h;applyPageRule();window.print();};
   $('#delHint').textContent = made.length>1
     ? (made.length+' '+packName(it,made.length)+' booked in — '+made[0].bcode+' to '+made[made.length-1].bcode+'. Each needs its own label.')
     : ('Batch '+b.bcode+' booked in.');
@@ -1753,6 +1796,48 @@ function labelHTML(b,it,chk){
   return labelStyle()==='mini' ? miniLabel(b,it,chk) : bigLabel(b,it,chk);
 }
 $('#lblKind').onchange=renderLabels;
+$('#lblWhen').onchange=renderLabels;
+$('#lblTarget').onchange=()=>{ if($('#lblTarget').value==='roll') $('#lblSize').value='mini'; renderLabels(); };
+
+/* @page cannot be switched with a class, so the rule is rewritten
+   just before the print dialog opens. */
+function applyPageRule(){
+  const roll = $('#lblTarget') && $('#lblTarget').value==='roll';
+  let el=document.getElementById('pageRule');
+  if(!el){el=document.createElement('style');el.id='pageRule';document.head.appendChild(el);}
+  el.textContent = roll ? '@page{size:25mm 15mm;margin:0}' : '@page{size:A4;margin:6mm}';
+  document.body.classList.toggle('roll',!!roll);
+  document.body.classList.toggle('outline',!!($('#lblOutline')&&$('#lblOutline').checked));
+}
+
+/* everything booked in today, newest first */
+function todaysBatches(){
+  const t=today();
+  const made={};
+  DB.moves.forEach(m=>{ if(m.type==='IN'&&m.bcode&&m.ts.slice(0,10)===t) made[m.bcode]=1; });
+  return DB.batches.filter(b=>made[b.bcode]);
+}
+function labelsForBatches(list){
+  let h='';
+  list.forEach(b=>{const it=item(b.code); if(it) h+=labelHTML(b,it,false);});
+  return h;
+}
+$('#dayPrint').onclick=()=>{
+  const list=todaysBatches();
+  if(!list.length){toast('Nothing was booked in today',true);return;}
+  $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
+  $('#printGrid').innerHTML=labelsForBatches(list);
+  applyPageRule();window.print();
+};
+$('#dayCsv').onclick=()=>{
+  const list=todaysBatches();
+  if(!list.length){toast('Nothing was booked in today',true);return;}
+  const rows=list.map(b=>btRow(b.bcode,1)).filter(Boolean);
+  /* fixed filename on purpose: BarTender keeps one saved connection to
+     this path, so the daily job is overwrite then print. */
+  download('labels.csv',csv([BT_HEAD,...rows]));
+  toast('Saved labels.csv — '+rows.length+' label'+(rows.length===1?'':'s'));
+};
 $('#lblSize').onchange=()=>{renderLabels();
   if($('#delPrev').style.display!=='none'){const el=$('#delLabel');if(el&&el.dataset.bc){
     const b=batch(el.dataset.bc);if(b){el.className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
@@ -1767,7 +1852,7 @@ $('#lPrint').onclick=()=>{
   picked.forEach(code=>{const b=batch(code),it=b?item(b.code):item(code);
     if(it)for(let i=0;i<n;i++)h+=labelHTML(b,it,false);});
   $('#printGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
-  $('#printGrid').innerHTML=h;window.print();
+  $('#printGrid').innerHTML=h;applyPageRule();window.print();
 };
 
 /* ---------- category rules ---------- */
@@ -1916,6 +2001,43 @@ $('#csvStock').onclick=()=>{const {byItem}=stockMaps();
 $('#csvLog').onclick=()=>download('log-'+today()+'.csv',
   csv([['When','Item code','Batch code','Item','Type','Qty','Operator','Note'],
     ...DB.moves.map(m=>[m.ts,m.code,m.bcode,(item(m.code)||{}).name||'',m.type,m.qty,m.user,m.note])]));
+/* ---------- clearing test data ---------- */
+function renderClear(){
+  if(!$('#clrItems'))return;
+  $('#clrItems').textContent=DB.items.length;
+  $('#clrBatch').textContent=DB.batches.length;
+  $('#clrMoves').textContent=DB.moves.length;
+  const c=$('#clrCloud');
+  if(SB.on){
+    c.style.display='';
+    c.innerHTML='You are connected to the shared database. These buttons clear <b>this device only</b>. '
+      +'The cloud copy is deliberately delete-proof, so it has to be cleared in Supabase &rarr; SQL Editor with:<br>'
+      +'<code style="display:inline-block;margin-top:6px">delete from movements; delete from batches;</code> '
+      +'<span style="opacity:.75">(add <code>delete from items;</code> for a full reset)</span><br>'
+      +'Clear the cloud first, then this device — otherwise the next sync pulls the test data straight back.';
+  } else c.style.display='none';
+}
+$('#clrMove').onclick=async()=>{
+  if(!DB.moves.length&&!DB.batches.length){toast('There is nothing to clear',true);return;}
+  if(!confirm('Clear '+DB.moves.length+' movements and '+DB.batches.length+' packs?\n\n'
+    +DB.items.length+' items, your category rules and settings are kept.\nEvery stock figure will go to zero.'))return;
+  if(!confirm('Last check — have you downloaded a backup?\n\nThis cannot be undone.'))return;
+  DB.moves=[]; DB.batches=[]; lastMove=null; ASK=null; PACKASK=null;
+  persistLocal(); render();
+  show('','<p class="idle">Ready. Stock is at zero — scan or book in your real opening quantities.</p>');
+  toast('Cleared. Items kept, stock at zero');
+};
+$('#clrAll').onclick=async()=>{
+  if(!confirm('Remove every item, rule, pack and movement from this device?'))return;
+  if(!confirm('Last check — download a backup first if you have not.\n\nErase now?'))return;
+  const keep=Object.assign({},DB.settings);
+  DB={items:[],batches:[],moves:[],seq:1,settings:keep};
+  lastMove=null; ASK=null; PACKASK=null;
+  persistLocal(); render();
+  show('','<p class="idle">Cleared. Add your items to begin.</p>');
+  toast('Everything cleared on this device');
+};
+
 $('#bkDown').onclick=()=>{download('storectl-backup-'+nowISO().slice(0,19).replace(/[:T]/g,'-')+'.json',
   JSON.stringify(DB,null,2),'application/json');toast('Backup downloaded');};
 $('#bkUp').onclick=()=>$('#bkFile').click();
@@ -1926,9 +2048,7 @@ $('#bkFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new Fil
       settings:Object.assign(DB.settings,d.settings||{})};
     persistLocal();loadSettings();render();toast('Restored');}catch(x){toast('Not a valid backup',true);}};
   r.readAsText(f);e.target.value='';};
-$('#bkWipe').onclick=()=>{if(!confirm('Erase all data on this device?'))return;
-  if(!confirm('Download a backup first if you have not. Erase now?'))return;
-  DB={items:[],batches:[],moves:[],seq:1,settings:DB.settings};persistLocal();render();toast('Erased');};
+$('#bkWipe').onclick=()=>$('#clrAll').click();
 
 /* ---------- settings / backend ---------- */
 function loadSettings(){const s=DB.settings;
@@ -2065,16 +2185,30 @@ function renderItems(){
 }
 
 function renderLabels(){
-  const kind=$('#lblKind').value;
+  const kind=$('#lblKind').value, when=($('#lblWhen')||{value:'all'}).value;
   let html='';
+  const n=todaysBatches().length;
+  if($('#dayCount')) $('#dayCount').textContent = n
+    ? n+' pack'+(n===1?'':'s')+' booked in today'
+    : 'Nothing booked in today yet';
   if(kind==='batch'){
     const {byBatch}=stockMaps();
-    const bs=DB.batches.slice().sort((a,b)=>(b.recv||'').localeCompare(a.recv||''));
+    let bs=DB.batches.slice().sort((a,b)=>(b.recv||'').localeCompare(a.recv||''));
+    if(when==='today'){ const keep={}; todaysBatches().forEach(b=>keep[b.bcode]=1); bs=bs.filter(b=>keep[b.bcode]); }
+    if(when==='open')  bs=bs.filter(b=>(byBatch[b.bcode]||0)>0);
     html=bs.map(b=>{const it=item(b.code);return it?labelHTML(b,it,true):'';}).join('');
     $('#eLbl').style.display=bs.length?'none':'';
   }else{
-    html=DB.items.map(i=>labelHTML(null,i,true)).join('');
-    $('#eLbl').style.display=DB.items.length?'none':'';
+    const {byItem}=stockMaps();
+    let its=DB.items.slice();
+    if(when==='open') its=its.filter(i=>(byItem[i.code]||0)>0);
+    if(when==='today'){
+      const t=today(), seen={};
+      DB.moves.forEach(m=>{ if(m.ts.slice(0,10)===t) seen[m.code]=1; });
+      its=its.filter(i=>seen[i.code]);
+    }
+    html=its.map(i=>labelHTML(null,i,true)).join('');
+    $('#eLbl').style.display=its.length?'none':'';
   }
   $('#lGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
   $('#lGrid').innerHTML=html;
@@ -2115,7 +2249,7 @@ function renderStatus(){
   $('#stCnt').textContent=DB.items.length+' items · '+DB.moves.length+' moves';
   $('#beHint').textContent = SB.on ? (SB.ok?'Connected.':'Not connected — check the URL and key.') : 'Data stays in this browser.';
 }
-function render(){renderStock();renderItems();renderLabels();renderLog();renderCats();renderStatus();previewCode();}
+function render(){renderStock();renderItems();renderLabels();renderLog();renderCats();renderClear();renderStatus();previewCode();}
 
 /* ---------- boot ---------- */
 (async function(){
