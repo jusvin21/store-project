@@ -262,6 +262,15 @@ tr.low:hover td{background:#F6D7B7}
   letter-spacing:-.015em;color:var(--on-surface)}
 .stat.alert{background:var(--warn-container);border-color:#F3D6B6}
 .stat.alert .k,.stat.alert .v{color:var(--on-warn-container)}
+/* a category block in Stock */
+.catblk{border:1px solid var(--outline-var);border-radius:14px;overflow:hidden;margin-bottom:14px;background:var(--surface)}
+.catblk>.hd{display:flex;align-items:center;gap:10px;padding:11px 15px;
+  background:color-mix(in srgb,var(--cc) 10%,#fff);border-bottom:1px solid color-mix(in srgb,var(--cc) 24%,#fff)}
+.catblk>.hd .nm{font-weight:600;font-size:14.5px;color:var(--cc)}
+.catblk>.hd .sub{margin-left:auto;font-size:12.5px;color:var(--on-surface-var)}
+.catblk>.hd i{width:10px;height:10px;border-radius:50%;background:var(--cc);flex:0 0 10px}
+.catblk .tablewrap{border-radius:0;background:transparent}
+.catblk th{background:transparent}
 
 /* ---------------- simple mode ---------------- */
 body.simple .modes,body.simple .bigrow{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px}
@@ -463,9 +472,12 @@ body.simple .modes,body.simple .bigrow{display:grid;grid-template-columns:1fr 1f
     <div class="row spread" style="margin-bottom:10px">
       <input id="q" class="txt" placeholder="Search item, code, rack…" style="min-width:210px;flex:1">
       <label class="lsel"><input type="checkbox" id="fLow"> Low only</label>
+      <label class="lsel"><input type="checkbox" id="fGroup" checked
+        data-tip="One table per category|Terminals, couplers and the rest get their own table with their own colour and subtotal.">Group by category</label>
       <button class="btn ghost sm" id="csvStock" data-tip="Export stock|One row per material with quantity and value. For purchasing and accounts.">CSV</button>
     </div>
-    <div class="tablewrap"><table id="tStock"><thead><tr>
+    <div id="stockGroups"></div>
+    <div class="tablewrap" id="stockFlat"><table id="tStock"><thead><tr>
       <th>Code</th><th>Item</th><th class="num">On hand</th><th class="num">Also</th>
       <th class="num">Reorder below</th><th class="num">Value</th><th>Rack</th><th>Batches</th>
     </tr></thead><tbody></tbody></table></div>
@@ -729,7 +741,7 @@ body.simple .modes,body.simple .bigrow{display:grid;grid-template-columns:1fr 1f
       <button class="btn ghost sm" id="csvLog" data-tip="Export the log|Every movement ever recorded, with time and operator. Your audit trail.">CSV</button>
     </div>
     <div class="tablewrap"><table id="tLog"><thead><tr>
-      <th>When</th><th>Code</th><th>Item</th><th>Type</th><th class="num">Qty</th><th>By</th><th>Note</th><th></th>
+      <th>When</th><th>Code</th><th>Item</th><th>Type</th><th class="num">Qty</th><th>By</th><th>Note</th><th></th><th></th>
     </tr></thead><tbody></tbody></table></div>
     <div class="empty" id="eLog" style="display:none"><b>No movements</b>Every scan is recorded here and never deleted.</div>
   </div>
@@ -953,7 +965,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-08-09.14';
+const BUILD='2026-08-09.15';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1019,6 +1031,9 @@ const SB={
   async post(table,rows){const r=await fetch(sbBase(DB.settings.sbUrl)+'/rest/v1/'+table,
     {method:'POST',headers:this.h({'Prefer':'return=representation'}),body:JSON.stringify(rows)});
     if(!r.ok)throw new Error(await r.text());return r.json();},
+  async del(table,q){const r=await fetch(sbBase(DB.settings.sbUrl)+'/rest/v1/'+table+'?'+q,
+    {method:'DELETE',headers:this.h()});
+    if(!r.ok)throw new Error(await r.text());return true;},
   async patch(table,q,row){const r=await fetch(sbBase(DB.settings.sbUrl)+'/rest/v1/'+table+'?'+q,
     {method:'PATCH',headers:this.h(),body:JSON.stringify(row)});
     if(!r.ok)throw new Error(await r.text());return true;},
@@ -2591,6 +2606,16 @@ $('#csvStock').onclick=()=>{const {byItem}=stockMaps();
 $('#csvLog').onclick=()=>download('log-'+today()+'.csv',
   csv([['When','Item code','Batch code','Item','Type','Qty','Operator','Note'],
     ...DB.moves.map(m=>[m.ts,m.code,m.bcode,(item(m.code)||{}).name||'',m.type,m.qty,m.user,m.note])]));
+/* The database is set up to refuse deletes on the ledger. If you want the
+   app to be able to delete, the policy has to be relaxed deliberately. */
+function cloudDeleteHelp(){
+  alert('The shared database is blocking deletes on purpose.\n\n'
+   +'To allow them, run this once in Supabase → SQL Editor:\n\n'
+   +'create policy moves_delete on movements for delete using (true);\n'
+   +'create policy batches_delete on batches for delete using (true);\n\n'
+   +'Until then, deletes only apply to this device and will come back on the next sync.');
+}
+
 /* ---------- clearing test data ---------- */
 function renderClear(){
   if(!$('#clrItems'))return;
@@ -2701,6 +2726,7 @@ const whenStr=iso=>{const d=new Date(iso);
          d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});};
 
 $('#q').oninput=renderStock; $('#fLow').onchange=renderStock; $('#qm').oninput=renderLog;
+$('#fGroup').onchange=renderStock;
 
 function renderStock(){
   const {byItem,byBatch}=stockMaps();
@@ -2712,7 +2738,7 @@ function renderStock(){
     return [i.code,i.name,i.cat,i.sup,i.loc].join(' ').toLowerCase().includes(q);
   }).sort((a,b)=>a.name.localeCompare(b.name));
 
-  $('#tStock tbody').innerHTML=rows.map(i=>{
+  const stockRow=i=>{
     const oh=byItem[i.code]||0, low=i.min>0&&oh<=i.min;
     const kids=DB.batches.filter(b=>b.code===i.code&&(byBatch[b.bcode]||0)>0);
     const soon=kids.filter(b=>{const d=dTo(b.exp);return d!==null&&d<=DB.settings.expDays;}).length;
@@ -2735,9 +2761,35 @@ function renderStock(){
       <td class="num">${money(oh*i.rate)}</td>
       <td>${esc(i.loc||'—')}</td>
       <td class="code">${kids.length}${isSerial(i)&&kids.length?' <span style="opacity:.6">open</span>':''}${soon?' <span class="pill exp">'+soon+' expiring</span>':''}</td></tr>`;
-  }).join('');
+  };
+
+  const HEAD=`<thead><tr><th>Code</th><th>Item</th><th class="num">On hand</th><th class="num">Also</th>
+      <th class="num">Reorder below</th><th class="num">Value</th><th>Rack</th><th>Batches</th></tr></thead>`;
+  const grouped=$('#fGroup')?$('#fGroup').checked:true;
+
+  if(grouped){
+    $('#stockFlat').style.display='none';
+    const order=cats().map(c=>c.name);
+    const seen=[...new Set(rows.map(i=>i.cat||''))]
+      .sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);
+        return (ia<0?99:ia)-(ib<0?99:ib) || String(a).localeCompare(String(b));});
+    $('#stockGroups').innerHTML = seen.map(cat=>{
+      const list=rows.filter(i=>(i.cat||'')===cat);
+      const val=list.reduce((s2,i)=>s2+(byItem[i.code]||0)*i.rate,0);
+      const lowN=list.filter(i=>i.min>0&&(byItem[i.code]||0)<=i.min).length;
+      return `<div class="catblk" style="--cc:${esc(catCol(cat))}">
+        <div class="hd"><i></i><span class="nm">${esc(cat||'No category')}</span>
+          <span class="sub">${list.length} item${list.length===1?'':'s'} · ${money(val)}${lowN?' · <b style="color:var(--warn)">'+lowN+' to order</b>':''}</span></div>
+        <div class="tablewrap"><table>${HEAD}<tbody>${list.map(stockRow).join('')}</tbody></table></div>
+      </div>`;
+    }).join('');
+  } else {
+    $('#stockGroups').innerHTML='';
+    $('#stockFlat').style.display=DB.items.length?'':'none';
+    $('#tStock tbody').innerHTML=rows.map(stockRow).join('');
+  }
   $('#eStock').style.display=DB.items.length?'none':'';
-  $('#tStock').style.display=DB.items.length?'':'none';
+  if(!DB.items.length){ $('#stockGroups').innerHTML=''; $('#stockFlat').style.display='none'; }
 
   const low=DB.items.filter(i=>i.min>0&&(byItem[i.code]||0)<=i.min)
     .sort((a,b)=>((byItem[a.code]||0)-a.min)-((byItem[b.code]||0)-b.min));
@@ -2767,9 +2819,35 @@ function renderItems(){
     <td class="code" style="font-size:12px">${esc(packText(i)||('loose · '+i.unit))}</td>
     <td class="num">${esc(qtyText(i,i.min))}</td><td class="num">${fmt(i.rate)}</td>
     <td>${esc(i.sup||'—')}</td>
-    <td><button class="btn ghost sm" data-e="${esc(i.code)}">Edit</button></td></tr>`).join('');
+    <td style="white-space:nowrap"><button class="btn ghost sm" data-e="${esc(i.code)}">Edit</button>
+      <button class="btn red sm" data-d="${esc(i.code)}"
+        data-tip="Delete item|Removes the item, its packs and its whole movement history.">Delete</button></td></tr>`).join('');
   $('#eItems').style.display=DB.items.length?'none':'';
   $$('#tItems [data-e]').forEach(b=>b.onclick=()=>editItem(b.dataset.e));
+  $$('#tItems [data-d]').forEach(b=>b.onclick=async()=>{
+    const it=item(b.dataset.d); if(!it)return;
+    const {byItem}=stockMaps();
+    const mv=DB.moves.filter(m=>m.code===it.code).length;
+    const bt=DB.batches.filter(x=>x.code===it.code).length;
+    if(!confirm('Delete '+it.code+' — '+it.name+'?\n\n'
+      +'This also removes '+bt+' pack'+(bt===1?'':'s')+' and '+mv+' movement'+(mv===1?'':'s')+'.\n'
+      +'Current stock: '+qtyText(it,byItem[it.code]||0)))return;
+    if(!confirm('Last check. The whole history for this item disappears.\n\nDelete it?'))return;
+    const codes=DB.batches.filter(x=>x.code===it.code).map(x=>x.bcode);
+    DB.moves=DB.moves.filter(m=>m.code!==it.code);
+    DB.batches=DB.batches.filter(x=>x.code!==it.code);
+    DB.items=DB.items.filter(x=>x.code!==it.code);
+    persistLocal();
+    if(SB.on){
+      try{
+        await SB.del('movements','item_code=eq.'+encodeURIComponent(it.code));
+        await SB.del('batches','item_code=eq.'+encodeURIComponent(it.code));
+        await SB.del('items','code=eq.'+encodeURIComponent(it.code));
+        toast('Deleted here and in the cloud');
+      }catch(e){ toast('Deleted here — the cloud refused, see the note',true); cloudDeleteHelp(); }
+    } else toast('Deleted '+it.code);
+    resetItemForm(); lastMove=null; render();
+  });
   const opts=DB.items.slice().sort((a,b)=>a.name.localeCompare(b.name))
     .map(i=>`<option value="${esc(i.code)}">${esc(i.name)} — ${esc(i.code)}</option>`).join('');
   const cur=$('#dItem').value; $('#dItem').innerHTML=opts; if(cur)$('#dItem').value=cur;
@@ -2830,9 +2908,34 @@ function renderLog(){
       <td><span class="tag ${t}">${m.type}</span></td>
       <td class="num">${sign}${fmt(Math.abs(m.qty))}</td>
       <td>${esc(m.user||'—')}</td><td>${esc(m.note||'')}</td>
-      <td><button class="btn ghost sm" data-r="${esc(m.id)}">Reverse</button></td></tr>`;}).join('');
+      <td><button class="btn ghost sm" data-r="${esc(m.id)}"
+            data-tip="Reverse|Adds an opposite entry. Both stay visible — the safe way to correct a mistake.">Reverse</button></td>
+      <td><button class="btn red sm" data-x="${esc(m.id)}"
+            data-tip="Delete for good|Erases the entry completely. Nothing will show that it ever happened.">Delete</button></td></tr>`;}).join('');
   $('#eLog').style.display=DB.moves.length?'none':'';
   $('#tLog').style.display=DB.moves.length?'':'none';
+  $$('#tLog [data-x]').forEach(b=>b.onclick=async()=>{
+    const m=DB.moves.find(x=>x.id===b.dataset.x); if(!m)return;
+    const it=item(m.code);
+    if(!confirm('Delete this entry for good?\n\n'
+      +whenStr(m.ts)+'  '+m.type+' '+fmt(Math.abs(m.qty))+' '+(it?unitName(it,m.qty):'')+'\n'
+      +(m.bcode||m.code)+'\n\nReversing is safer — it keeps both the mistake and the correction visible.'))return;
+    if(!confirm('Last check. This cannot be undone and leaves no trace.\n\nDelete it?'))return;
+    /* if this entry created a pack and nothing else touched that pack,
+       the pack has no reason to exist either */
+    const orphan = m.bcode && DB.moves.filter(x=>x.bcode===m.bcode).length===1 ? m.bcode : null;
+    DB.moves=DB.moves.filter(x=>x.id!==m.id);
+    if(orphan && confirm('The pack '+orphan+' was created by that entry and has no other movements.\n\nRemove the pack as well?')){
+      DB.batches=DB.batches.filter(x=>x.bcode!==orphan);
+      if(SB.on){ try{ await SB.del('batches','batch_code=eq.'+encodeURIComponent(orphan)); }catch(e){} }
+    }
+    persistLocal();
+    if(SB.on){
+      try{ await SB.del('movements','id=eq.'+encodeURIComponent(m.id)); toast('Deleted here and in the cloud'); }
+      catch(e){ toast('Deleted here — the cloud refused, see Setup',true); cloudDeleteHelp(); }
+    } else toast('Entry deleted');
+    lastMove=null; render();
+  });
   $$('#tLog [data-r]').forEach(b=>b.onclick=async()=>{
     const m=DB.moves.find(x=>x.id===b.dataset.r); if(!m)return;
     if(!confirm('Add a reversing entry for this movement? The original stays in the log.'))return;
