@@ -386,6 +386,26 @@ body.simple .modes,body.simple .bigrow{display:grid;grid-template-columns:1fr 1f
   #scanInput,  .stats{grid-template-columns:repeat(2,1fr)}
   .labelgrid{grid-template-columns:repeat(auto-fill,minmax(160px,1fr))}
 }
+/* ---------------- scan popup ---------------- */
+#scanModal{position:fixed;inset:0;z-index:150;display:none;align-items:center;justify-content:center;padding:16px}
+#scanModal.on{display:flex}
+.smbg{position:absolute;inset:0;background:rgba(8,33,76,.55);backdrop-filter:blur(3px)}
+.smcard{position:relative;width:min(520px,100%);max-height:min(86vh,760px);overflow:auto;
+  background:var(--surface);color:var(--on-surface);border-radius:22px;padding:24px 22px 22px;
+  box-shadow:0 24px 64px -12px rgba(8,33,76,.55), 0 4px 12px rgba(8,33,76,.28);
+  animation:smUp .18s cubic-bezier(.2,0,0,1);-webkit-overflow-scrolling:touch}
+@keyframes smUp{from{transform:scale(.94);opacity:0}to{transform:none;opacity:1}}
+body.smopen{overflow:hidden}
+.smcard.ok{background:var(--tertiary-container);color:var(--on-tertiary-container)}
+.smcard.bad{background:var(--error-container);color:var(--on-error-container)}
+.smcard.info{background:var(--primary-container);color:var(--on-primary-container)}
+.smx{position:absolute;top:12px;right:12px;width:40px;height:40px;border:0;border-radius:50%;
+  background:rgba(0,0,0,.08);color:inherit;font-size:15px;cursor:pointer;line-height:1;z-index:2}
+.smx:hover{background:rgba(0,0,0,.16)}
+#scanModal .rnm{padding-right:44px}
+@media (max-width:420px){ #scanModal{padding:10px} .smcard{padding:20px 16px 18px;border-radius:20px} }
+@media (prefers-reduced-motion:reduce){ .smcard{animation:none} }
+
 @media print{
   body{background:#fff}
   body::before,.brandrule{display:none!important}
@@ -965,7 +985,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-08-09.15';
+const BUILD='2026-08-10.18';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1232,6 +1252,7 @@ document.addEventListener('keydown',e=>{
 let smTimer=null;
 function closeScanModal(){ clearTimeout(smTimer);
   document.getElementById('scanModal').classList.remove('on');
+  document.body.classList.remove('smopen');
   document.getElementById('smBody').innerHTML=''; }
 document.getElementById('smBg').onclick=closeScanModal;
 document.getElementById('smClose').onclick=closeScanModal;
@@ -1259,6 +1280,8 @@ function show(cls,html,quiet){
   card.className='smcard '+cls;
   document.getElementById('smBody').innerHTML=html;
   document.getElementById('scanModal').classList.add('on');
+  document.body.classList.add('smopen');
+  const sc=document.getElementById('smCard'); if(sc) sc.scrollTop=0;
   clearTimeout(smTimer);
   /* anything with a control in it waits for the person, whatever it is */
   const needsAnswer=/<button/.test(html);
@@ -1338,17 +1361,24 @@ async function handleCode(raw){
   const onHand=byItem[it.code]||0;
   const avail = b ? (byBatch[b.bcode]||0) : onHand;
 
-  if(b && !hasPack(it)){
+  /* Only warn when the item was never configured AND its category expects a
+     pack. An item somebody deliberately set to loose is simply loose. */
+  const rule=catRule(it.cat);
+  if(b && !hasPack(it) && !it.packSet && rule && rule.pack && (mode==='IN'||mode==='OUT')){
     beep(false);
-    show('bad',`<span class="tag err">Packing not set up</span>
+    show('bad',`<span class="tag err">Packing never set</span>
       <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
       <div class="rcd">${esc(code)}</div>
-      <div class="rcd" style="margin-top:8px">This code is a pack, but <b>${esc(it.name)}</b> is still set to
-        <b>loose</b> — nobody has said what it comes in or how many are inside. Until that is filled in it can
-        only move single ${esc(unitName(it,2))}.</div>
-      <div class="row mt"><button class="btn sm" id="qa">Fix this item</button></div>`);
+      <div class="rcd" style="margin-top:8px"><b>${esc(it.cat)}</b> normally come in ${esc(plural(rule.pack,2))},
+        but nothing was ever set for this item, so it can only move single ${esc(unitName(it,2))}.</div>
+      <div class="bigrow">
+        <button class="big grey" id="qa" style="font-size:15px">Set the packing<small>${esc(fmt(rule.packQty||0))} ${esc(it.unit||'pcs')} per ${esc(rule.pack)}</small></button>
+        <button class="big grey" id="qb" style="font-size:15px">Keep it loose<small>carry on in ${esc(unitName(it,2))}</small></button>
+      </div>`);
     $('#qa').onclick=()=>{ closeScanModal(); go('recv');
       $('#dItem').value=it.code; dPackShow(); dPackOpen(); delUnits(); };
+    $('#qb').onclick=async()=>{ it.packSet=true; await pushItem(it,false); persistLocal(); render();
+      toast(it.name+' will stay loose'); handleCode(code); };
     return;
   }
 
@@ -1444,7 +1474,7 @@ function renderWhole(){
   show(dir==='IN'?'ok':'info',scanHead(dir==='IN'?'in':'out',
       dir==='IN'?('Put this '+(it.pack||'pack')+' back'):('Issue this '+(it.pack||'pack')))+`
     <button class="big ${dir==='IN'?'in':'out'}" style="width:100%;margin-top:16px" id="sWhole">
-      ${dir==='IN'?'Put back':'Issue'} the whole ${esc(it.pack||'pack')}
+      ${dir==='IN'?'Receive this whole':'Issue this whole'} ${esc(it.pack||'pack')}
       <small>${fmt(amount)} ${esc(unitName(it,amount))}</small></button>`+btnBack('sWBack'));
   $('#sWhole').onclick=()=>{SCAN.unit='base'; SCAN.buf=String(amount); commitScan(); };
   $('#sWBack').onclick=backStep;
@@ -1460,7 +1490,7 @@ function renderPartOrAll(){
       dir==='IN'?('Into this '+(it.pack||'pack')):('From this '+(it.pack||'pack')))+`
     <div class="bar2"><i style="width:${pct}%"></i></div>
     <div class="bigrow">
-      <button class="big ${dir==='IN'?'in':'out'}" id="sPAll">${dir==='IN'?'Fill to full':'Take all'}<small>${fmt(amount)} ${esc(unitName(it,amount))}</small></button>
+      <button class="big ${dir==='IN'?'in':'out'}" id="sPAll">${dir==='IN'?'Fill to full':'Issue all of it'}<small>${fmt(amount)} ${esc(unitName(it,amount))}</small></button>
       <button class="big grey" id="sPPart">Type a number<small>part of the ${esc(it.pack||'pack')}</small></button>
     </div>`+btnBack('sPBack'));
   $('#sPAll').onclick =()=>{SCAN.unit='base'; SCAN.buf=String(amount); commitScan();};
@@ -1487,7 +1517,7 @@ function renderKeypad(isCount){
     else if(u==='pack'&&n>0) note='= '+fmt(base)+' '+unitName(it,base);
   }
   const label = isCount ? ('Record count of '+v)
-              : (dir==='IN'?'Add ':'Take ')+v+' '+word;
+              : (dir==='IN'?'Receive ':'Issue ')+v+' '+word;
   show(bad?'bad':(isCount?'info':(dir==='IN'?'ok':'info')),
     scanHead(isCount?'adj':(dir==='IN'?'in':'out'),
       isCount?'Stocktake':(dir==='IN'?'Receive':'Issue'))+`
@@ -1877,6 +1907,7 @@ $('#saveItem').onclick=async()=>{
   const serial = pack&&per>0 && $('#fSerial').value==='1';
   const d={name:$('#fName').value.trim(),code:$('#fCode').value.trim().toUpperCase(),
     cat:$('#fCat').value.trim(),unit:stub.unit,pack:pack,packQty:per,whole:whole,serial:serial,
+    packSet:true,
     minBasis:basis,
     min: basis==='pack' ? toBase(stub,rawMin) : rawMin,
     rate:numv($('#fRate').value),sup:$('#fSup').value.trim(),loc:$('#fLoc').value.trim(),note:$('#fNote').value.trim()};
@@ -1912,11 +1943,12 @@ function dPackShow(){
   if(!it){ box.style.display='none'; return; }
   box.style.display='';
   const set=hasPack(it);
-  $('#dPackNow').innerHTML = set
-    ? esc(setupLine(it))
-    : '<b style="color:var(--error)">Not set — this item can only move single '+esc(unitName(it,2))+'</b>';
-  box.style.background = set ? 'var(--sc)' : 'var(--error-container)';
-  $('#dPackEdit').textContent = set ? 'Change' : 'Set it now';
+  const decided = set || it.packSet;
+  $('#dPackNow').innerHTML = set ? esc(setupLine(it))
+    : (it.packSet ? 'Loose — counted in '+esc(unitName(it,2))+', set on purpose'
+                  : '<b style="color:var(--error)">Never set — this item can only move single '+esc(unitName(it,2))+'</b>');
+  box.style.background = decided ? 'var(--sc)' : 'var(--error-container)';
+  $('#dPackEdit').textContent = decided ? 'Change' : 'Set it now';
 }
 function dPackOpen(){
   const it=item($('#dItem').value); if(!it)return;
@@ -1941,6 +1973,7 @@ $('#dPackSave').onclick=async()=>{
   it.pack=pk; it.packQty=pk?per:0;
   it.whole  = !!pk && per>0 && $('#dPackWhole').value==='1';
   it.serial = !!pk && per>0 && $('#dPackSerial').value==='1';
+  it.packSet=true;                 /* a person decided this — stop second-guessing it */
   await pushItem(it,false); persistLocal();
   $('#dPackFields').style.display='none';
   dPackShow(); delUnits(); delPrev(); renderLabels(); render();
@@ -1989,7 +2022,7 @@ $('#saveDel').onclick=async()=>{
   const q=inPacks?typed*per:typed;
   if(!it){toast('Pick an item',true);return;}
   if(q<=0){toast('Enter the quantity received',true);$('#dQty').focus();return;}
-  if(!hasPack(it)){
+  if(!hasPack(it) && !it.packSet){
     const r=catRule(it.cat);
     if(r&&r.pack){
       toast('Set the packing first — '+it.cat+' normally come in '+r.pack+'s',true);
@@ -1999,6 +2032,7 @@ $('#saveDel').onclick=async()=>{
     if(!confirm(it.name+' has no packing set, so it will be booked in as loose '+unitName(it,2)+'.\n\nContinue?')){
       dPackShow(); dPackOpen(); return;
     }
+    it.packSet=true; await pushItem(it,false);
   }
   if(isWhole(it)&&typed%1!==0){toast(it.name+' comes in whole '+packName(it,2)+' — enter a whole number',true);$('#dQty').focus();return;}
   const d=$('#dDate').value||today();
@@ -2349,6 +2383,7 @@ function renderCats(){
    the scan can only offer loose pieces. This copies the rule onto them. */
 $('#applyCats').onclick=async()=>{
   const targets=DB.items.filter(i=>{
+    if(i.packSet)return false;              /* somebody already decided */
     const r=catRule(i.cat); if(!r)return false;
     return !hasPack(i) || i.whole===undefined || i.serial===undefined;
   });
@@ -2419,6 +2454,7 @@ $('#bulkGo').onclick=async()=>{
     else if(r.minBase!=null){ min = r.minBase; }
     else min = 0;
     made.push({code:nextItemCode(cat),name:name,cat:cat,unit:unit,pack:pack,packQty:per,whole:whole,serial:serial,
+      packSet:(p[2]!==undefined&&p[2]!==''),
       minBasis:(pack&&per>0)?'pack':'base',min:min,rate:numv(p[5]),sup:'',loc:'',note:''});
   }
   if(!made.length){toast('Nothing new to add',true);$('#bulkHint').textContent=skipped.length+' name(s) already exist.';return;}
@@ -2745,8 +2781,8 @@ function renderStock(){
     return `<tr class="${low?'low':''}">
       <td class="code">${esc(i.code)}</td>
       <td>${catDot(i.cat)}${esc(i.name)}${low?' <span class="pill">Reorder</span>':''}${
-        (!hasPack(i)&&DB.batches.some(x=>x.code===i.code))
-          ? ' <span class="pill exp">Packing not set</span>' : ''}${hasPack(i)?'<div class="rcd" style="font-size:11px;opacity:.6">'+esc(packText(i))+'</div>':''}</td>
+        (!hasPack(i)&&!i.packSet&&catRule(i.cat)&&catRule(i.cat).pack)
+          ? ' <span class="pill exp">Packing never set</span>' : ''}${hasPack(i)?'<div class="rcd" style="font-size:11px;opacity:.6">'+esc(packText(i))+'</div>':''}</td>
       <td class="num">${isWhole(i)
           ? (isSerial(i)
               ? fmt(openPacks(i.code))+' <span style="opacity:.6">'+esc(packName(i,openPacks(i.code)))+'</span>'
