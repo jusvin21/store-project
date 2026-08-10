@@ -524,23 +524,23 @@ body.smopen{overflow:hidden}
       <label class="f"><span>Counted in</span><input id="fUnit" list="unitL" value="pcs"><datalist id="unitL">
         <option>pcs</option><option>m</option><option>ft</option><option>roll</option><option>kg</option>
         <option>g</option><option>L</option><option>ml</option><option>sheet</option></datalist></label>
-      <label class="f"><span>Comes in</span><select id="fPack">
+      <label class="f" style="display:none"><span>Comes in</span><select id="fPack">
         <option value="">Loose — no pack</option>
         <option>roll</option><option>packet</option><option>carton</option>
         <option>box</option><option>bag</option><option>bundle</option><option>coil</option><option>set</option>
       </select></label>
-      <label class="f"><span id="fPerLbl">Per pack</span><input id="fPer" type="number" inputmode="decimal" step="any" value="0"
+      <label class="f" style="display:none"><span id="fPerLbl">Per pack</span><input id="fPer" type="number" inputmode="decimal" step="any" value="0"
         data-tip="How many in one pack|A roll of 2.8 BL holds 3000 pcs. A carton of tape holds 24 rolls."><span class="hint" id="packPrev"></span></label>
-      <label class="f"><span>Issued as</span><select id="fWhole"
+      <label class="f" style="display:none"><span>Issued as</span><select id="fWhole"
         data-tip="How it leaves the store|Whole packs only means a roll goes out as a roll. Any quantity allows part of an opened pack.">
         <option value="0">Any quantity</option><option value="1">Whole packs only</option></select></label>
-      <label class="f"><span>Each pack tracked?</span><select id="fSerial"
+      <label class="f" style="display:none"><span>Each pack tracked?</span><select id="fSerial"
         data-tip="Track every pack separately|Each physical packet gets its own code and its own running balance, so you can see how much is left in an opened one.">
         <option value="0">No — one code for the item</option><option value="1">Yes — a code per pack</option></select></label>
       <label class="f"><span>Reorder when below</span>
         <div class="row" style="gap:6px;flex-wrap:nowrap">
           <input id="fMin" type="number" inputmode="decimal" step="any" value="0" style="flex:1;min-width:0">
-          <select id="fMinBasis" class="txt" style="width:104px;padding:11px 8px"><option value="pack">packs</option><option value="base">units</option></select>
+          <select id="fMinBasis" class="txt" style="width:104px;padding:11px 8px;display:none"><option value="pack">packs</option><option value="base">units</option></select>
         </div>
         <span class="hint" id="minPrev"></span></label>
       <label class="f"><span>Rate per unit</span><input id="fRate" type="number" inputmode="decimal" step="any" value="0"></label>
@@ -551,7 +551,8 @@ body.smopen{overflow:hidden}
     <div class="row mt">
       <button class="btn blue" id="saveItem">Save item</button>
       <button class="btn ghost" id="cancelItem" style="display:none">Cancel</button>
-      <span class="hint" id="itemHint">Opening stock is added on the “New delivery” tab, so it appears in the log.</span>
+      <span class="hint" id="itemHint">Opening stock and packing — rolls, packets, whole or loose — are set on the
+        <b>New delivery</b> tab when the first lot arrives. You only ever set them once.</span>
     </div>
   </div>
   <div class="card">
@@ -985,7 +986,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-08-10.18';
+const BUILD='2026-08-10.19';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1364,7 +1365,7 @@ async function handleCode(raw){
   /* Only warn when the item was never configured AND its category expects a
      pack. An item somebody deliberately set to loose is simply loose. */
   const rule=catRule(it.cat);
-  if(b && !hasPack(it) && !it.packSet && rule && rule.pack && (mode==='IN'||mode==='OUT')){
+  if(false && b && !hasPack(it) && !it.packSet && rule && rule.pack && (mode==='IN'||mode==='OUT')){
     beep(false);
     show('bad',`<span class="tag err">Packing never set</span>
       <div class="rnm" style="margin-top:6px">${esc(it.name)}</div>
@@ -1899,19 +1900,23 @@ $('#fCat').addEventListener('input',previewCode);
 $('#fCode').addEventListener('input',previewCode);
 
 $('#saveItem').onclick=async()=>{
-  const pack=$('#fPack').value, per=numv($('#fPer').value);
+  /* Packing belongs to the delivery screen. Editing an item carries its
+     existing packing across untouched; a new item simply has none yet. */
+  const prev = editing ? item(editing) : null;
+  const pack = prev ? (prev.pack||'') : '';
+  const per  = prev ? packSize(prev) : 0;
   const stub={pack,packQty:per,unit:$('#fUnit').value.trim()||'pcs'};
   const rawMin=numv($('#fMin').value);
-  const basis=$('#fMinBasis').value;
-  const whole  = pack&&per>0 && $('#fWhole').value==='1';
-  const serial = pack&&per>0 && $('#fSerial').value==='1';
+  const basis='base';        /* reorder is always in counted units */
+  const whole  = prev ? !!prev.whole  : false;
+  const serial = prev ? !!prev.serial : false;
   const d={name:$('#fName').value.trim(),code:$('#fCode').value.trim().toUpperCase(),
     cat:$('#fCat').value.trim(),unit:stub.unit,pack:pack,packQty:per,whole:whole,serial:serial,
-    packSet:true,
+    packSet: prev ? !!prev.packSet : false,
     minBasis:basis,
     min: basis==='pack' ? toBase(stub,rawMin) : rawMin,
     rate:numv($('#fRate').value),sup:$('#fSup').value.trim(),loc:$('#fLoc').value.trim(),note:$('#fNote').value.trim()};
-  if(pack&&per<=0){toast('Set how many are in one '+pack,true);$('#fPer').focus();return;}
+
   if(!d.name){toast('Item name is required',true);$('#fName').focus();return;}
   if(d.code&&!c128bits(d.code)){toast('That code cannot go into a barcode',true);return;}
   if(editing){
@@ -1931,6 +1936,9 @@ $('#saveItem').onclick=async()=>{
 function editItem(code){const it=item(code);if(!it)return;editing=it.code;
   $('#fName').value=it.name;$('#fCode').value=it.code;$('#fCat').value=it.cat;$('#fUnit').value=it.unit;
   $('#fMin').value=it.min;$('#fRate').value=it.rate;$('#fSup').value=it.sup;$('#fLoc').value=it.loc;$('#fNote').value=it.note;
+  $('#itemHint').innerHTML = hasPack(it)||it.packSet
+    ? 'Packing: <b>'+esc(setupLine(it))+'</b> — change it on the New delivery tab.'
+    : 'Packing is set on the <b>New delivery</b> tab when the first lot arrives.';
   $('#itemTitle').textContent='Edit '+it.code;$('#saveItem').textContent='Update item';$('#cancelItem').style.display='';
   go('items');$('#fName').focus();}
 
@@ -1945,10 +1953,15 @@ function dPackShow(){
   const set=hasPack(it);
   const decided = set || it.packSet;
   $('#dPackNow').innerHTML = set ? esc(setupLine(it))
-    : (it.packSet ? 'Loose — counted in '+esc(unitName(it,2))+', set on purpose'
-                  : '<b style="color:var(--error)">Never set — this item can only move single '+esc(unitName(it,2))+'</b>');
+    : (it.packSet ? 'Loose — counted in '+esc(unitName(it,2))
+                  : '<b style="color:var(--error)">Required — say how '+esc(it.name)+' arrives before booking it in</b>');
   box.style.background = decided ? 'var(--sc)' : 'var(--error-container)';
   $('#dPackEdit').textContent = decided ? 'Change' : 'Set it now';
+  /* first delivery for this item: open it, and hold the book-in button */
+  const sd=$('#saveDel');
+  if(sd){ sd.disabled=!decided;
+    sd.textContent = decided ? 'Book in & make label' : 'Set the packing first'; }
+  if(!decided && $('#dPackFields').style.display==='none') dPackOpen();
 }
 function dPackOpen(){
   const it=item($('#dItem').value); if(!it)return;
@@ -2781,7 +2794,7 @@ function renderStock(){
     return `<tr class="${low?'low':''}">
       <td class="code">${esc(i.code)}</td>
       <td>${catDot(i.cat)}${esc(i.name)}${low?' <span class="pill">Reorder</span>':''}${
-        (!hasPack(i)&&!i.packSet&&catRule(i.cat)&&catRule(i.cat).pack)
+        (!hasPack(i)&&!i.packSet&&DB.batches.some(x=>x.code===i.code))
           ? ' <span class="pill exp">Packing never set</span>' : ''}${hasPack(i)?'<div class="rcd" style="font-size:11px;opacity:.6">'+esc(packText(i))+'</div>':''}</td>
       <td class="num">${isWhole(i)
           ? (isSerial(i)
