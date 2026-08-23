@@ -239,8 +239,46 @@ td{padding:12px 14px;border-bottom:1px solid var(--outline-var);vertical-align:m
 tbody tr:last-child td{border-bottom:0}
 tbody tr:hover td{background:var(--sc-high)}
 td.num,th.num{text-align:right;font-family:var(--mono)}
-tr.low td{background:var(--warn-container)}
-tr.low:hover td{background:#F6D7B7}
+/* Low stock has to survive a category colour behind it and a dusty screen,
+   so it gets a solid left bar, bold figures and a real chip — not a tint. */
+tr.low td{background:#FFF1E4}
+tr.low:hover td{background:#FFE4CC}
+tr.low td:first-child{box-shadow:inset 5px 0 0 var(--warn)}
+tr.low td.num{font-weight:700;color:var(--warn)}
+tr.out td{background:#FDEAE8}
+tr.out:hover td{background:#FADBD8}
+tr.out td:first-child{box-shadow:inset 5px 0 0 var(--error)}
+tr.out td.num{font-weight:700;color:var(--error)}
+.pill{font-weight:600}
+.pill.urgent{background:var(--warn);color:#fff;border:0}
+.pill.gone{background:var(--error);color:#fff;border:0}
+
+/* search box */
+.srch{display:flex;align-items:center;gap:8px;flex:1;min-width:230px;
+  border:1px solid var(--outline);border-radius:22px;padding:0 8px 0 14px;background:var(--surface);
+  transition:border-color .12s,box-shadow .12s}
+.srch:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px rgba(14,53,115,.12)}
+.srch .ic{font-size:15px;color:var(--on-surface-dim);transform:rotate(-45deg);flex:0 0 auto}
+.srch input{flex:1;min-width:0;border:0;outline:0;background:transparent;padding:11px 0;font-size:15px}
+.srch button{border:0;background:transparent;color:var(--on-surface-dim);cursor:pointer;
+  width:30px;height:30px;border-radius:50%;font-size:13px;visibility:hidden}
+.srch button:hover{background:var(--sc-high)}
+.srch.has button{visibility:visible}
+
+/* order cards */
+.ordcard{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:12px;
+  border:1px solid var(--outline-var);margin-bottom:10px;background:var(--surface);
+  border-left:6px solid var(--warn)}
+.ordcard.gone{border-left-color:var(--error);background:#FDEAE8}
+.ordcard .who{min-width:0;flex:1}
+.ordcard .nm{font-weight:600;font-size:15px;line-height:1.25}
+.ordcard .sub{font-size:12.5px;color:var(--on-surface-var);margin-top:3px}
+.ordcard .buy{text-align:right;white-space:nowrap}
+.ordcard .buy b{display:block;font-family:var(--display);font-size:22px;font-weight:600;line-height:1.1;color:var(--warn)}
+.ordcard.gone .buy b{color:var(--error)}
+.ordcard .buy span{font-size:11.5px;color:var(--on-surface-var)}
+.catblk>.hd .warnN{background:var(--warn);color:#fff;font-size:11.5px;font-weight:600;
+  padding:2px 9px;border-radius:8px;margin-left:8px}
 .code{font-family:var(--mono);font-size:13px}
 .pill{display:inline-block;font-size:11px;font-weight:500;text-transform:none;
   background:var(--warn-container);color:var(--on-warn-container);padding:3px 9px;border-radius:8px;
@@ -258,8 +296,15 @@ tr.low:hover td{background:#F6D7B7}
 .stat::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--grad-app);opacity:.5}
 .stat.alert::after{background:linear-gradient(90deg,#EC0021,#96560B);opacity:.9}
 .stat .k{font-size:12.5px;font-weight:500;color:var(--on-surface-dim);text-transform:none}
-.stat .v{font-family:var(--display);font-size:31px;font-weight:400;line-height:1.15;margin-top:5px;
-  letter-spacing:-.015em;color:var(--on-surface)}
+.stat .v{font-family:var(--display);font-size:clamp(20px,4.4vw,29px);font-weight:400;line-height:1.15;
+  margin-top:5px;letter-spacing:-.02em;color:var(--on-surface);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stat.live{cursor:pointer}
+.stat.live .go{position:absolute;right:14px;bottom:12px;font-size:22px;line-height:1;
+  color:var(--on-surface-dim);opacity:.55;transition:transform .15s,opacity .15s}
+.stat.live:hover .go{opacity:1;transform:translateX(3px)}
+.stat.live:focus-visible{outline:3px solid var(--primary);outline-offset:2px}
+.stat.live:active{transform:translateY(0) scale(.985)}
 .stat.alert{background:var(--warn-container);border-color:#F3D6B6}
 .stat.alert .k,.stat.alert .v{color:var(--on-warn-container)}
 /* a category block in Stock */
@@ -490,12 +535,16 @@ body.smopen{overflow:hidden}
   <div class="stats" id="stats"></div>
   <div class="card mt">
     <div class="row spread" style="margin-bottom:10px">
-      <input id="q" class="txt" placeholder="Search item, code, rack…" style="min-width:210px;flex:1">
+      <div class="srch"><span class="ic">&#9906;</span>
+        <input id="q" placeholder="Search name, code, rack, supplier, batch…" autocomplete="off">
+        <button id="qClear" aria-label="Clear" title="Clear">&#10005;</button></div>
       <label class="lsel"><input type="checkbox" id="fLow"> Low only</label>
+      <label class="lsel"><input type="checkbox" id="fExp"> Expiring</label>
       <label class="lsel"><input type="checkbox" id="fGroup" checked
         data-tip="One table per category|Terminals, couplers and the rest get their own table with their own colour and subtotal.">Group by category</label>
       <button class="btn ghost sm" id="csvStock" data-tip="Export stock|One row per material with quantity and value. For purchasing and accounts.">CSV</button>
     </div>
+    <div class="hint" id="qCount" style="margin:-2px 0 10px;display:none"></div>
     <div id="stockGroups"></div>
     <div class="tablewrap" id="stockFlat"><table id="tStock"><thead><tr>
       <th>Code</th><th>Item</th><th class="num">On hand</th><th class="num">Also</th>
@@ -503,12 +552,30 @@ body.smopen{overflow:hidden}
     </tr></thead><tbody></tbody></table></div>
     <div class="empty" id="eStock" style="display:none"><b>Store is empty</b>Create an item first.</div>
   </div>
+</section>
+
+<!-- ---------- TO ORDER ---------- -->
+<section class="view" id="v-order">
   <div class="card">
-    <h2 class="sec">Needs ordering</h2>
-    <div class="tablewrap"><table id="tLow"><thead><tr>
-      <th>Code</th><th>Item</th><th class="num">On hand</th><th class="num">Reorder below</th><th class="num">Order at least</th><th>Supplier</th>
-    </tr></thead><tbody></tbody></table></div>
-    <div class="empty" id="eLow" style="display:none">Nothing below its reorder level.</div>
+    <div class="row spread" style="margin-bottom:14px">
+      <div>
+        <h2 class="sec" style="margin:0">Needs ordering</h2>
+        <div class="hint" id="orderSummary" style="margin-top:3px"></div>
+      </div>
+      <div class="row">
+        <button class="btn ghost sm" id="orderCopy" data-tip="Copy the list|Plain text you can paste into WhatsApp or an email to the vendor.">Copy list</button>
+        <button class="btn ghost sm" id="orderCsv" data-tip="Export|One row per material to order.">CSV</button>
+      </div>
+    </div>
+    <div id="orderCards"></div>
+    <div class="empty" id="eLow" style="display:none"><b>Nothing to order</b>Everything is above its reorder level.</div>
+  </div>
+
+  <div class="card">
+    <h2 class="sec">Running low soon</h2>
+    <p class="hint" style="margin:-8px 0 12px">Within 25% of the reorder level — not urgent yet, but worth knowing before the next order goes out.</p>
+    <div id="soonCards"></div>
+    <div class="empty" id="eSoon" style="display:none">Nothing approaching its reorder level.</div>
   </div>
 </section>
 
@@ -681,6 +748,19 @@ body.smopen{overflow:hidden}
       <button class="btn ghost sm" id="dayCsv"
         data-tip="Daily file for BarTender|Always saves as labels.csv. Point BarTender at that one path once, and every day you just overwrite it and press print.">Save labels.csv for BarTender</button>
       <span class="hint" id="dayCount" style="margin-left:auto"></span>
+    </div>
+    <div class="row" style="margin:0 0 12px;gap:8px">
+      <div class="srch" style="min-width:200px"><span class="ic">&#9906;</span>
+        <input id="lq" placeholder="Search item, code, vendor, lot…" autocomplete="off">
+        <button id="lqClear" aria-label="Clear" title="Clear">&#10005;</button></div>
+      <label class="lsel" style="gap:6px">From
+        <input type="date" id="lFrom" class="txt" style="padding:8px 10px"
+          data-tip="Received on or after|Leave both dates empty for everything."></label>
+      <label class="lsel" style="gap:6px">To
+        <input type="date" id="lTo" class="txt" style="padding:8px 10px"></label>
+      <button class="btn ghost sm" id="lDates" data-tip="Quick range|Set both dates to today.">Today</button>
+      <button class="btn ghost sm" id="lReset">Clear filters</button>
+      <span class="hint" id="lCount" style="margin-left:auto"></span>
     </div>
     <div class="labelgrid" id="lGrid"></div>
     <div class="empty" id="eLbl" style="display:none">Nothing to print yet.</div>
@@ -986,7 +1066,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-08-10.19';
+const BUILD='2026-08-10.22';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1726,6 +1806,7 @@ const ICON={
   labels:'<path d="M3 3h8l10 10-8 8L3 11z"/><circle cx="7.5" cy="7.5" r="1.3"/>',
   log:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>',
   setup:'<path d="M4 6h9M18 6h2M4 12h3M12 12h8M4 18h9M18 18h2"/><circle cx="15.5" cy="6" r="2"/><circle cx="9.5" cy="12" r="2"/><circle cx="15.5" cy="18" r="2"/>',
+  order:'<path d="M4 5h3l2.2 10.5a1.6 1.6 0 001.6 1.3h7.4a1.6 1.6 0 001.6-1.3L21 8H7"/><circle cx="10" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/>',
   more:'<circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/>',
   lock:'<rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 018 0v3"/>'
 };
@@ -1733,6 +1814,7 @@ const svg=k=>`<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
 
 const NAV=[
   {v:'stock', l:'Stock',    i:'stock',  tip:'Stock|What is on the racks right now, and what needs ordering.'},
+  {v:'order', l:'To order', i:'order', tip:'To order|Everything below its reorder level, with how much to buy.'},
   {v:'recv',  l:'Delivery', i:'recv',   full:'New delivery', tip:'New delivery|Book in material that has just arrived, with vendor and lot number.'},
   {v:'items', l:'Items',    i:'items',  tip:'Items|Create and edit materials. This is where codes are assigned.'},
   {v:'labels',l:'Labels',   i:'labels', tip:'Labels|Print rack labels, or export them for BarTender.'},
@@ -1740,7 +1822,7 @@ const NAV=[
   {v:'setup', l:'Setup',    i:'setup',  tip:'Setup|Database, operator name, scan screen and backups.'}
 ];
 /* what the bottom bar shows, by who is holding the device */
-const BOT_FULL   = ['scan','stock','recv','log','more'];
+const BOT_FULL   = ['scan','stock','order','recv','more'];
 const BOT_SIMPLE = ['scan','stock','unlock'];
 
 let view='stock', unlocked=false;
@@ -2159,6 +2241,11 @@ function labelHTML(b,it,chk){
 }
 $('#lblKind').onchange=renderLabels;
 $('#lblWhen').onchange=renderLabels;
+['lq','lFrom','lTo'].forEach(id=>{const el=$('#'+id); if(el) el.oninput=renderLabels;});
+if($('#lqClear')) $('#lqClear').onclick=()=>{ $('#lq').value=''; renderLabels(); $('#lq').focus(); };
+if($('#lDates'))  $('#lDates').onclick=()=>{ $('#lFrom').value=today(); $('#lTo').value=today(); renderLabels(); };
+if($('#lReset'))  $('#lReset').onclick=()=>{ $('#lq').value=''; $('#lFrom').value=''; $('#lTo').value='';
+  $('#lblWhen').value='all'; renderLabels(); };
 if($('#dayNew')) $('#dayNew').onchange=renderLabels;
 $('#lblTarget').onchange=()=>{ if($('#lblTarget').value==='roll') $('#lblSize').value='mini'; renderLabels(); };
 
@@ -2775,25 +2862,52 @@ const whenStr=iso=>{const d=new Date(iso);
          d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});};
 
 $('#q').oninput=renderStock; $('#fLow').onchange=renderStock; $('#qm').oninput=renderLog;
+$('#fExp').onchange=renderStock;
 $('#fGroup').onchange=renderStock;
+$('#qClear').onclick=()=>{ $('#q').value=''; renderStock(); $('#q').focus(); };
+/* "/" focuses search from anywhere, the way every list tool works */
+document.addEventListener('keydown',e=>{
+  if(e.key!=='/'||e.ctrlKey||e.metaKey)return;
+  const t=e.target;
+  if(t&&(t.tagName==='INPUT'||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||t.isContentEditable))return;
+  e.preventDefault(); go('stock'); setTimeout(()=>$('#q').focus(),80);
+});
 
 function renderStock(){
   const {byItem,byBatch}=stockMaps();
   const q=$('#q').value.trim().toLowerCase(), lowOnly=$('#fLow').checked;
+  const expOnly=$('#fExp')&&$('#fExp').checked;
   const rows=DB.items.filter(i=>{
     const oh=byItem[i.code]||0;
     if(lowOnly&&!(i.min>0&&oh<=i.min))return false;
+    if(expOnly){
+      const soon=DB.batches.some(x=>x.code===i.code&&(byBatch[x.bcode]||0)>0
+        &&x.exp&&dTo(x.exp)!==null&&dTo(x.exp)<=DB.settings.expDays);
+      if(!soon)return false;
+    }
     if(!q)return true;
-    return [i.code,i.name,i.cat,i.sup,i.loc].join(' ').toLowerCase().includes(q);
+    /* also match a batch or roll code, so scanning a sticker into the box finds its item */
+    const kids=DB.batches.filter(x=>x.code===i.code).map(x=>x.bcode+' '+(x.ven||'')+' '+(x.lot||'')).join(' ');
+    return [i.code,i.name,i.cat,i.sup,i.loc,i.unit,i.pack,i.note,kids]
+      .join(' ').toLowerCase().includes(q);
   }).sort((a,b)=>a.name.localeCompare(b.name));
+
+  const qbox=$('#q')?$('#q').closest('.srch'):null;
+  if(qbox) qbox.classList.toggle('has',!!q);
+  const qc=$('#qCount');
+  if(qc){ qc.style.display=q?'':'none';
+    qc.innerHTML = q ? (rows.length
+      ? '<b>'+rows.length+'</b> of '+DB.items.length+' items match “'+esc($('#q').value.trim())+'”'
+      : 'Nothing matches “'+esc($('#q').value.trim())+'”') : ''; }
 
   const stockRow=i=>{
     const oh=byItem[i.code]||0, low=i.min>0&&oh<=i.min;
     const kids=DB.batches.filter(b=>b.code===i.code&&(byBatch[b.bcode]||0)>0);
     const soon=kids.filter(b=>{const d=dTo(b.exp);return d!==null&&d<=DB.settings.expDays;}).length;
-    return `<tr class="${low?'low':''}">
+    const gone=oh<=0&&i.min>0;
+    return `<tr class="${gone?'out':(low?'low':'')}">
       <td class="code">${esc(i.code)}</td>
-      <td>${catDot(i.cat)}${esc(i.name)}${low?' <span class="pill">Reorder</span>':''}${
+      <td>${catDot(i.cat)}${esc(i.name)}${gone?' <span class="pill gone">Out</span>':(low?' <span class="pill urgent">Reorder</span>':'')}${
         (!hasPack(i)&&!i.packSet&&DB.batches.some(x=>x.code===i.code))
           ? ' <span class="pill exp">Packing never set</span>' : ''}${hasPack(i)?'<div class="rcd" style="font-size:11px;opacity:.6">'+esc(packText(i))+'</div>':''}</td>
       <td class="num">${isWhole(i)
@@ -2819,7 +2933,7 @@ function renderStock(){
   if(grouped){
     $('#stockFlat').style.display='none';
     const order=cats().map(c=>c.name);
-    const seen=[...new Set(rows.map(i=>i.cat||''))]
+    const seen=[...new Set(rows.map(i=>i.cat||''))].filter(c=>rows.some(i=>(i.cat||'')===c))
       .sort((a,b)=>{const ia=order.indexOf(a),ib=order.indexOf(b);
         return (ia<0?99:ia)-(ib<0?99:ib) || String(a).localeCompare(String(b));});
     $('#stockGroups').innerHTML = seen.map(cat=>{
@@ -2828,7 +2942,8 @@ function renderStock(){
       const lowN=list.filter(i=>i.min>0&&(byItem[i.code]||0)<=i.min).length;
       return `<div class="catblk" style="--cc:${esc(catCol(cat))}">
         <div class="hd"><i></i><span class="nm">${esc(cat||'No category')}</span>
-          <span class="sub">${list.length} item${list.length===1?'':'s'} · ${money(val)}${lowN?' · <b style="color:var(--warn)">'+lowN+' to order</b>':''}</span></div>
+          <span class="sub">${list.length} item${list.length===1?'':'s'} · ${money(val)}</span>
+          ${lowN?`<span class="warnN">${lowN} to order</span>`:''}</div>
         <div class="tablewrap"><table>${HEAD}<tbody>${list.map(stockRow).join('')}</tbody></table></div>
       </div>`;
     }).join('');
@@ -2842,24 +2957,116 @@ function renderStock(){
 
   const low=DB.items.filter(i=>i.min>0&&(byItem[i.code]||0)<=i.min)
     .sort((a,b)=>((byItem[a.code]||0)-a.min)-((byItem[b.code]||0)-b.min));
-  $('#tLow tbody').innerHTML=low.map(i=>{const oh=byItem[i.code]||0;
+  renderOrder(byItem,low);
+  const _skipLowTable=true; if(!_skipLowTable) $('#tLow tbody').innerHTML=low.map(i=>{const oh=byItem[i.code]||0;
     const short=Math.max(0,i.min-oh);
     const need=hasPack(i)?Math.ceil(toPacks(i,short)):short;
     return `<tr class="low"><td class="code">${esc(i.code)}</td><td>${catDot(i.cat)}${esc(i.name)}</td>
       <td class="num">${esc(qtyText(i,oh))}</td><td class="num">${esc(qtyText(i,i.min))}</td>
       <td class="num">${fmt(need)} ${esc(hasPack(i)?packName(i,need):i.unit)}</td>
       <td>${esc(i.sup||'—')}</td></tr>`;}).join('');
-  $('#eLow').style.display=low.length?'none':'';
-  $('#tLow').style.display=low.length?'':'none';
 
   const val=DB.items.reduce((s,i)=>s+(byItem[i.code]||0)*i.rate,0);
   const openB=DB.batches.filter(b=>(byBatch[b.bcode]||0)>0).length;
   const exp=DB.batches.filter(b=>{const d=dTo(b.exp);return d!==null&&d<=DB.settings.expDays&&(byBatch[b.bcode]||0)>0;}).length;
   const td=DB.moves.filter(m=>m.ts.slice(0,10)===today()).length;
-  $('#stats').innerHTML=[['Items',DB.items.length,0],['Stock value',money(val),0],
-    ['Below reorder',low.length,low.length>0],['Open batches',openB,0],
-    ['Expiring soon',exp,exp>0],['Scans today',td,0]]
-    .map(([k,v,a])=>`<div class="stat ${a?'alert':''}"><div class="k">${k}</div><div class="v">${v}</div></div>`).join('');
+  /* Each tile jumps to the screen that answers the question it raises. */
+  const tiles=[
+    {k:'Items',        v:DB.items.length, go:'items',  hint:'See every item'},
+    {k:'Stock value',  v:money(val),      go:null},
+    {k:'Below reorder',v:low.length,      alert:low.length>0, act:'order', hint:'Open the order list'},
+    {k:'Open batches', v:openB,           act:'openBatches',  hint:'Show packs that still have stock'},
+    {k:'Expiring soon',v:exp,             alert:exp>0,        act:'expiring', hint:'Show what is expiring'},
+    {k:'Scans today',  v:td,              act:'today',        hint:'Open today in the log'}
+  ];
+  $('#stats').innerHTML=tiles.map((t,ix)=>{
+    const live=(t.go||t.act)&&!(typeof t.v==='number'&&t.v===0);
+    return `<div class="stat ${t.alert?'alert':''} ${live?'live':''}" ${live?`role="button" tabindex="0" data-tile="${ix}"`:''}
+      ${live&&t.hint?`data-tip="${esc(t.k)}|${esc(t.hint)}"`:''}>
+      <div class="k">${t.k}</div><div class="v">${t.v}</div>
+      ${live?'<span class="go">&rsaquo;</span>':''}</div>`;
+  }).join('');
+  $$('#stats [data-tile]').forEach(el=>{
+    const t=tiles[+el.dataset.tile];
+    const fire=()=>tileAction(t);
+    el.onclick=fire;
+    el.onkeydown=e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();fire();} };
+  });
+}
+
+/* How much to buy, in the unit you actually buy in. */
+function orderCard(i,oh,gone){
+  const short=Math.max(0,i.min-oh);
+  const need = hasPack(i) ? Math.ceil(toPacks(i,short)) : Math.ceil(short);
+  const unit = hasPack(i) ? packName(i,need) : unitName(i,need);
+  return `<div class="ordcard${gone?' gone':''}">
+    ${catDot(i.cat)}
+    <div class="who">
+      <div class="nm">${esc(i.name)} ${gone?'<span class="pill gone">Out of stock</span>':'<span class="pill urgent">Reorder</span>'}</div>
+      <div class="sub"><span class="code">${esc(i.code)}</span>${i.loc?' · RACK '+esc(i.loc):''}${i.sup?' · '+esc(i.sup):''}</div>
+      <div class="sub">Have ${esc(qtyText(i,oh))} · reorder below ${esc(qtyText(i,i.min))}</div>
+    </div>
+    <div class="buy"><b>${fmt(need)}</b><span>${esc(unit)} to order</span></div>
+  </div>`;
+}
+function renderOrder(byItem,low){
+  if(!$('#orderCards'))return;
+  const gone=i=>(byItem[i.code]||0)<=0;
+  $('#orderCards').innerHTML=low.map(i=>orderCard(i,byItem[i.code]||0,gone(i))).join('');
+  $('#eLow').style.display=low.length?'none':'';
+  const outN=low.filter(gone).length;
+  $('#orderSummary').innerHTML = low.length
+    ? low.length+' item'+(low.length===1?'':'s')+' below the reorder level'
+      +(outN?' · <b style="color:var(--error)">'+outN+' completely out</b>':'')
+    : 'Everything is above its reorder level';
+
+  /* within 25% of the line — early warning, not yet urgent */
+  const soon=DB.items.filter(i=>{const oh=byItem[i.code]||0;
+    return i.min>0 && oh>i.min && oh<=i.min*1.25;})
+    .sort((a,b)=>((byItem[a.code]||0)-a.min)-((byItem[b.code]||0)-b.min));
+  $('#soonCards').innerHTML=soon.map(i=>{const oh=byItem[i.code]||0;
+    return `<div class="ordcard" style="border-left-color:var(--outline)">
+      ${catDot(i.cat)}
+      <div class="who"><div class="nm">${esc(i.name)}</div>
+        <div class="sub"><span class="code">${esc(i.code)}</span>${i.loc?' · RACK '+esc(i.loc):''}</div>
+        <div class="sub">Have ${esc(qtyText(i,oh))} · reorder below ${esc(qtyText(i,i.min))}</div></div>
+      <div class="buy"><b style="color:var(--on-surface-var)">${fmt(Math.round((oh-i.min)*10)/10)}</b>
+        <span>${esc(unitName(i,1))} above the line</span></div></div>`;}).join('');
+  $('#eSoon').style.display=soon.length?'none':'';
+}
+$('#orderCopy').onclick=()=>{
+  const {byItem}=stockMaps();
+  const low=DB.items.filter(i=>i.min>0&&(byItem[i.code]||0)<=i.min);
+  if(!low.length){toast('Nothing to order',true);return;}
+  const txt='Order list — '+new Date().toLocaleDateString('en-IN')+'\n\n'
+    +low.map(i=>{const oh=byItem[i.code]||0,short=Math.max(0,i.min-oh);
+      const need=hasPack(i)?Math.ceil(toPacks(i,short)):Math.ceil(short);
+      return '• '+i.name+' ('+i.code+') — '+fmt(need)+' '+(hasPack(i)?packName(i,need):unitName(i,need))
+        +'   [have '+fmt(oh)+' '+unitName(i,oh)+']';}).join('\n');
+  navigator.clipboard?.writeText(txt).then(()=>toast('Order list copied'),()=>toast('Could not copy',true));
+};
+$('#orderCsv').onclick=()=>{
+  const {byItem}=stockMaps();
+  const low=DB.items.filter(i=>i.min>0&&(byItem[i.code]||0)<=i.min);
+  if(!low.length){toast('Nothing to order',true);return;}
+  download('to-order-'+today()+'.csv',csv([['Code','Item','Category','On hand','Unit','Reorder below','Order','Order unit','Supplier','Rack'],
+    ...low.map(i=>{const oh=byItem[i.code]||0,short=Math.max(0,i.min-oh);
+      const need=hasPack(i)?Math.ceil(toPacks(i,short)):Math.ceil(short);
+      return [i.code,i.name,i.cat,oh,i.unit,i.min,need,hasPack(i)?packName(i,need):i.unit,i.sup,i.loc];})]));
+  toast('Exported');
+};
+
+function tileAction(t){
+  if(t.go){ go(t.go); return; }
+  if(t.act==='order'){ go('order'); return; }
+  if(t.act==='today'){ go('log'); $('#qm').value=today(); renderLog(); return; }
+  if(t.act==='openBatches'){ go('labels');
+    $('#lblKind').value='batch'; $('#lblWhen').value='open';
+    if($('#lq')){$('#lq').value='';$('#lFrom').value='';$('#lTo').value='';}
+    renderLabels(); return; }
+  if(t.act==='expiring'){ go('stock');
+    $('#q').value=''; $('#fLow').checked=false; $('#fExp').checked=true; renderStock();
+    $('#stockGroups').scrollIntoView({behavior:'smooth',block:'start'}); return; }
 }
 
 function renderItems(){
@@ -2907,8 +3114,16 @@ function renderItems(){
   if(!$('#dDate').value)$('#dDate').value=today();
 }
 
+function labelFilters(){
+  return {
+    q:  ($('#lq') ? $('#lq').value.trim().toLowerCase() : ''),
+    from:($('#lFrom')? $('#lFrom').value : ''),
+    to:  ($('#lTo')  ? $('#lTo').value   : '')
+  };
+}
 function renderLabels(){
   const kind=$('#lblKind').value, when=($('#lblWhen')||{value:'all'}).value;
+  const f=labelFilters();
   let html='';
   const n=todaysBatches().length;
   if($('#dayCount')){
@@ -2922,6 +3137,11 @@ function renderLabels(){
     let bs=DB.batches.slice().sort((a,b)=>(b.recv||'').localeCompare(a.recv||''));
     if(when==='today'){ const keep={}; todaysBatches().forEach(b=>keep[b.bcode]=1); bs=bs.filter(b=>keep[b.bcode]); }
     if(when==='open')  bs=bs.filter(b=>(byBatch[b.bcode]||0)>0);
+    if(f.from) bs=bs.filter(b=>(b.recv||'')>=f.from);
+    if(f.to)   bs=bs.filter(b=>(b.recv||'')<=f.to);
+    if(f.q)    bs=bs.filter(b=>{const it=item(b.code);
+      return [b.bcode,b.ven,b.lot,b.recv,it&&it.name,it&&it.code,it&&it.cat,it&&it.loc]
+        .join(' ').toLowerCase().includes(f.q);});
     html=bs.map(b=>{const it=item(b.code);
       if(!it)return '';
       const h=labelHTML(b,it,true);
@@ -2932,6 +3152,9 @@ function renderLabels(){
     const {byItem}=stockMaps();
     let its=DB.items.slice();
     if(when==='open') its=its.filter(i=>(byItem[i.code]||0)>0);
+    if(f.q) its=its.filter(i=>[i.code,i.name,i.cat,i.loc,i.sup].join(' ').toLowerCase().includes(f.q));
+    if(f.from||f.to) its=its.filter(i=>DB.batches.some(b=>b.code===i.code
+      && (!f.from||(b.recv||'')>=f.from) && (!f.to||(b.recv||'')<=f.to)));
     if(when==='today'){
       const t=today(), seen={};
       DB.moves.forEach(m=>{ if(m.ts.slice(0,10)===t) seen[m.code]=1; });
@@ -2943,11 +3166,24 @@ function renderLabels(){
   $('#lGrid').className='labelgrid'+(labelStyle()==='mini'?' minigrid':'');
   $('#lGrid').innerHTML=html;
   applyLabelVars();
+
+  const shown=$$('#lGrid .lchk').length;
+  const total=kind==='batch'?DB.batches.length:DB.items.length;
+  const filtered=f.q||f.from||f.to||when!=='all';
+  if($('#lq')) $('#lq').closest('.srch').classList.toggle('has',!!f.q);
+  if($('#lCount')) $('#lCount').innerHTML = filtered
+    ? '<b>'+shown+'</b> of '+total+' shown'+(shown?' · all ticked':'')
+    : shown+' label'+(shown===1?'':'s');
+  if(shown===0&&filtered){ $('#eLbl').style.display=''; 
+    $('#eLbl').innerHTML='<b>Nothing matches</b>Try clearing the filters.'; }
+  else if(shown===0){ $('#eLbl').innerHTML='<b>Nothing to print yet</b>Book in a delivery first.'; }
 }
 
 function renderLog(){
   const q=$('#qm').value.trim().toLowerCase();
-  const rows=DB.moves.filter(m=>!q||[m.code,m.bcode,m.type,m.note,m.user,(item(m.code)||{}).name||''].join(' ').toLowerCase().includes(q)).slice(0,500);
+  const rows=DB.moves.filter(m=>!q||
+    [m.code,m.bcode,m.type,m.note,m.user,(item(m.code)||{}).name||'',
+     m.ts,whenStr(m.ts)].join(' ').toLowerCase().includes(q)).slice(0,500);
   $('#tLog tbody').innerHTML=rows.map(m=>{
     const t=m.type==='IN'?'in':m.type==='OUT'?'out':'adj';
     const sign=m.type==='OUT'?'−':m.type==='IN'?'+':(m.qty>=0?'+':'−');
