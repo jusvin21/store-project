@@ -265,6 +265,31 @@ tr.out td.num{font-weight:700;color:var(--error)}
 .srch button:hover{background:var(--sc-high)}
 .srch.has button{visibility:visible}
 
+/* searchable picker */
+.pick{position:relative}
+.pick input{width:100%;border:1px solid var(--outline);border-radius:10px;padding:11px 38px 11px 14px;
+  background:var(--surface);font-size:15px}
+.pick input:focus{border-color:var(--primary);border-width:2px;padding:10px 37px 10px 13px;outline:none}
+.pick>button{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:transparent;
+  color:var(--on-surface-dim);cursor:pointer;width:30px;height:30px;border-radius:50%;font-size:13px;visibility:hidden}
+.pick.has>button{visibility:visible}
+.pick>button:hover{background:var(--sc-high)}
+.picklist{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:60;display:none;
+  max-height:320px;overflow:auto;background:var(--surface);border:1px solid var(--outline-var);
+  border-radius:12px;box-shadow:0 12px 32px -8px rgba(8,33,76,.35);-webkit-overflow-scrolling:touch}
+.picklist.on{display:block}
+.picklist .opt{display:flex;align-items:center;gap:10px;padding:11px 14px;cursor:pointer;
+  border-bottom:1px solid var(--line-2,var(--outline-var))}
+.picklist .opt:last-child{border-bottom:0}
+.picklist .opt:hover,.picklist .opt.sel{background:var(--secondary-container)}
+.picklist .opt .t{min-width:0;flex:1}
+.picklist .opt .nm{font-weight:500;font-size:14.5px;line-height:1.25}
+.picklist .opt .sub{font-size:12px;color:var(--on-surface-var);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.picklist .opt .qty{font-family:var(--mono);font-size:12.5px;color:var(--on-surface-var);white-space:nowrap}
+.picklist .none{padding:16px 14px;color:var(--on-surface-var);font-size:13.5px}
+.picklist mark{background:#FFE9A8;color:inherit;border-radius:2px;padding:0 1px}
+
 /* order cards */
 .ordcard{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:12px;
   border:1px solid var(--outline-var);margin-bottom:10px;background:var(--surface);
@@ -650,7 +675,16 @@ body.smopen{overflow:hidden}
     <h2 class="sec">Book in a delivery</h2>
     <p class="hint" style="margin:0 0 11px">Each delivery gets its own batch code and its own label. Same item, different arrival — you keep track of which vendor and which lot the stock on the rack came from.</p>
     <div class="grid">
-      <label class="f req"><span>Item</span><select id="dItem"></select></label>
+      <label class="f req"><span>Item</span>
+        <div class="pick" id="dPick">
+          <input id="dSearch" placeholder="Type to search items…" autocomplete="off" role="combobox"
+            aria-expanded="false" aria-controls="dList"
+            data-tip="Find an item|Type any part of the name, code, category or rack. Arrow keys to move, Enter to pick.">
+          <button type="button" id="dPickClear" aria-label="Clear">&#10005;</button>
+          <div class="picklist" id="dList" role="listbox"></div>
+        </div>
+        <select id="dItem" style="display:none"></select>
+        <span class="hint" id="dPicked"></span></label>
       <label class="f"><span id="dPerLbl">Per pack this time</span>
         <input id="dPer" type="number" inputmode="decimal" step="any" value="0"
         data-tip="This delivery only|Rolls vary. Enter what is actually on the rolls that arrived — 3000, 4000, 5000. It is saved against these rolls, not the item.">
@@ -1066,7 +1100,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-08-10.22';
+const BUILD='2026-08-10.23';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1457,7 +1491,7 @@ async function handleCode(raw){
         <button class="big grey" id="qb" style="font-size:15px">Keep it loose<small>carry on in ${esc(unitName(it,2))}</small></button>
       </div>`);
     $('#qa').onclick=()=>{ closeScanModal(); go('recv');
-      $('#dItem').value=it.code; dPackShow(); dPackOpen(); delUnits(); };
+      $('#dItem').value=it.code; if($('#dSearch'))pickSync(); dPackShow(); dPackOpen(); delUnits(); };
     $('#qb').onclick=async()=>{ it.packSet=true; await pushItem(it,false); persistLocal(); render();
       toast(it.name+' will stay loose'); handleCode(code); };
     return;
@@ -2027,6 +2061,87 @@ function editItem(code){const it=item(code);if(!it)return;editing=it.code;
 /* ---------- new delivery ---------- */
 /* Packing can be set from here, because this is where you first find out
    it is missing — not on a screen you visited days ago. */
+/* Item picker. #dItem stays the single source of truth so every other
+   piece of delivery code keeps working unchanged. */
+let PICK={open:false,rows:[],sel:-1,browse:false};
+const hl=(t,q)=>{ if(!q)return esc(t);
+  const i=String(t).toLowerCase().indexOf(q);
+  return i<0?esc(t):esc(t.slice(0,i))+'<mark>'+esc(t.slice(i,i+q.length))+'</mark>'+esc(t.slice(i+q.length)); };
+
+function pickMatches(q){
+  const {byItem}=stockMaps();
+  const list=DB.items.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  if(!q) return list.slice(0,60);
+  const hit=i=>[i.name,i.code,i.cat,i.loc,i.sup].join(' ').toLowerCase().indexOf(q);
+  return list.filter(i=>hit(i)>=0)
+    /* name matches first, then earliest match position */
+    .sort((a,b)=>{
+      const an=a.name.toLowerCase().indexOf(q), bn=b.name.toLowerCase().indexOf(q);
+      const ar=an<0?99:an, br=bn<0?99:bn;
+      return ar-br || a.name.localeCompare(b.name);
+    }).slice(0,60);
+}
+function pickRender(){
+  /* After choosing, the box holds the chosen name. Re-opening should show
+     everything again, not just things matching that one name. */
+  const q=PICK.browse?'':$('#dSearch').value.trim().toLowerCase();
+  const {byItem}=stockMaps();
+  PICK.rows=pickMatches(q);
+  if(PICK.sel>=PICK.rows.length) PICK.sel=PICK.rows.length-1;
+  $('#dList').innerHTML = PICK.rows.length
+    ? PICK.rows.map((i,ix)=>{
+        const oh=byItem[i.code]||0;
+        const low=i.min>0&&oh<=i.min;
+        return `<div class="opt ${ix===PICK.sel?'sel':''}" role="option" data-ix="${ix}" data-code="${esc(i.code)}">
+          ${catDot(i.cat)}
+          <div class="t"><div class="nm">${hl(i.name,q)}</div>
+            <div class="sub"><span class="code">${hl(i.code,q)}</span>${i.cat?' · '+esc(i.cat):''}${i.loc?' · RACK '+esc(i.loc):''}</div></div>
+          <div class="qty">${esc(qtyText(i,oh))}${low?' <span class="pill urgent">low</span>':''}</div>
+        </div>`;}).join('')
+    : `<div class="none">No item matches “${esc($('#dSearch').value.trim())}”.<br>
+        Create it on the <b>Items</b> tab first.</div>`;
+  $$('#dList .opt').forEach(el=>{
+    el.onmousedown=e=>{ e.preventDefault(); pickChoose(el.dataset.code); };
+  });
+}
+function pickOpen(){ PICK.open=true; $('#dList').classList.add('on');
+  $('#dSearch').setAttribute('aria-expanded','true'); pickRender(); }
+function pickClose(){ PICK.open=false; $('#dList').classList.remove('on');
+  $('#dSearch').setAttribute('aria-expanded','false'); PICK.sel=-1; }
+function pickChoose(code){
+  const it=item(code); if(!it)return;
+  $('#dItem').value=code;
+  $('#dSearch').value=it.name;
+  $('#dPick').classList.add('has');
+  $('#dPicked').textContent=it.code+(it.loc?' · RACK '+it.loc:'')+(it.cat?' · '+it.cat:'');
+  PICK.browse=false;
+  pickClose();
+  $('#dItem').dispatchEvent(new Event('change'));
+}
+function pickSync(){
+  const it=item($('#dItem').value);
+  if(it){ $('#dSearch').value=it.name; $('#dPick').classList.add('has');
+    $('#dPicked').textContent=it.code+(it.loc?' · RACK '+it.loc:'')+(it.cat?' · '+it.cat:''); }
+  else { $('#dSearch').value=''; $('#dPick').classList.remove('has'); $('#dPicked').textContent=''; }
+}
+$('#dSearch').oninput=()=>{ PICK.browse=false; PICK.sel=0; if(!PICK.open)pickOpen(); else pickRender();
+  $('#dPick').classList.toggle('has',!!$('#dSearch').value); };
+$('#dSearch').onfocus=()=>{ $('#dSearch').select(); PICK.browse=true; pickOpen(); };
+$('#dSearch').onblur =()=>setTimeout(()=>{ pickClose(); pickSync(); },120);
+$('#dSearch').onkeydown=e=>{
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){
+    e.preventDefault(); if(!PICK.open){PICK.browse=true;return pickOpen();}
+    PICK.sel=Math.max(0,Math.min(PICK.rows.length-1,PICK.sel+(e.key==='ArrowDown'?1:-1)));
+    pickRender();
+    const el=$('#dList .opt.sel'); if(el&&el.scrollIntoView) el.scrollIntoView({block:'nearest'});
+  } else if(e.key==='Enter'){
+    if(PICK.open&&PICK.rows[PICK.sel]){ e.preventDefault(); pickChoose(PICK.rows[PICK.sel].code); }
+  } else if(e.key==='Escape'){ pickClose(); pickSync(); $('#dSearch').blur(); }
+};
+$('#dPickClear').onclick=()=>{ $('#dItem').value=''; $('#dSearch').value='';
+  $('#dPick').classList.remove('has'); $('#dPicked').textContent='';
+  $('#dItem').dispatchEvent(new Event('change')); $('#dSearch').focus(); };
+
 function dPackShow(){
   const it=item($('#dItem').value);
   const box=$('#dPackBox');
@@ -3107,6 +3222,7 @@ function renderItems(){
   const opts=DB.items.slice().sort((a,b)=>a.name.localeCompare(b.name))
     .map(i=>`<option value="${esc(i.code)}">${esc(i.name)} — ${esc(i.code)}</option>`).join('');
   const cur=$('#dItem').value; $('#dItem').innerHTML=opts; if(cur)$('#dItem').value=cur;
+  if($('#dSearch')) pickSync();
   dPackShow(); delUnits();
   const allCats=[...new Set(cats().map(c=>c.name).concat(DB.items.map(i=>i.cat).filter(Boolean)))];
   $('#catL').innerHTML=allCats.map(c=>`<option>${esc(c)}</option>`).join('');
