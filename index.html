@@ -900,6 +900,8 @@ body.smopen{overflow:hidden}
     </div>
     <div class="row mt">
       <button class="btn blue" id="saveBackend">Save &amp; connect</button>
+      <button class="btn ghost" id="refreshCloud"
+        data-tip="Get the latest|Pulls items, packs and movements from the shared database. Use it if another device has just made a change.">Refresh from cloud</button>
       <button class="btn ghost" id="testBackend" data-tip="Test the connection|Checks the URL and key without saving anything.">Test connection</button>
       <button class="btn ghost" id="pushLocal" data-tip="Upload once|Copies this device into the shared database. Run it from one device only, or codes will clash.">Upload this device to cloud</button>
     </div>
@@ -1100,7 +1102,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-08-10.23';
+const BUILD='2026-08-10.24';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1178,9 +1180,12 @@ const SB={
       this.get('batches?select=*&order=received_on.desc'),
       this.get('movements?select=*&order=created_at.desc&limit=5000')]);
     DB.items=items.map(r=>({code:r.code,name:r.name,cat:r.category||'',unit:r.unit||'pcs',
-      min:+r.min_qty||0,rate:+r.rate||0,sup:r.supplier||'',loc:r.location||'',note:r.notes||''}));
+      min:+r.min_qty||0,rate:+r.rate||0,sup:r.supplier||'',loc:r.location||'',note:r.notes||'',
+      pack:r.pack||'', packQty:+r.pack_qty||0,
+      whole:!!r.whole_only, serial:!!r.tracked, packSet:!!r.pack_set}));
     DB.batches=batches.map(r=>({bcode:r.batch_code,code:r.item_code,ven:r.vendor||'',lot:r.lot_no||'',
-      recv:r.received_on||'',exp:r.expiry||'',rate:+r.rate||0}));
+      recv:r.received_on||'',exp:r.expiry||'',rate:+r.rate||0,
+      qty0:+r.pack_size||0, printed:r.printed_at||null}));
     DB.moves=moves.map(r=>({id:r.id,ts:r.created_at,bcode:r.batch_code||'',code:r.item_code,
       type:r.kind,qty:+r.qty,note:r.note||'',user:r.operator||''}));
     this.ok=true;}
@@ -1196,14 +1201,17 @@ async function pushMove(mv){
 async function pushItem(it,isNew){
   persistLocal();
   if(SB.on){ const row={code:it.code,name:it.name,category:it.cat,unit:it.unit,min_qty:it.min,
-      rate:it.rate,supplier:it.sup,location:it.loc,notes:it.note};
+      rate:it.rate,supplier:it.sup,location:it.loc,notes:it.note,
+      pack:it.pack||null, pack_qty:packSize(it)||0,
+      whole_only:!!it.whole, tracked:!!it.serial, pack_set:!!it.packSet};
     try{ if(isNew) await SB.post('items',[row]); else await SB.patch('items','code=eq.'+encodeURIComponent(it.code),row);}
     catch(e){ toast('Item not synced to cloud — check Setup',true);} }
 }
 async function pushBatch(b){
   persistLocal();
   if(SB.on){ try{ await SB.post('batches',[{batch_code:b.bcode,item_code:b.code,vendor:b.ven||null,
-      lot_no:b.lot||null,received_on:b.recv||null,expiry:b.exp||null,rate:b.rate||0}]);}
+      lot_no:b.lot||null,received_on:b.recv||null,expiry:b.exp||null,rate:b.rate||0,
+      pack_size:b.qty0||0, printed_at:b.printed||null}]);}
     catch(e){ toast('Batch not synced to cloud',true);} }
 }
 
@@ -2486,10 +2494,13 @@ function pendingToday(){
   const only=$('#dayNew')&&$('#dayNew').checked;
   return todaysBatches().filter(b=>!only||!b.printed);
 }
-function markPrinted(list){
+async function markPrinted(list){
   const t=nowISO();
   list.forEach(b=>{ b.printed=t; });
   persistLocal(); render();
+  if(SB.on){ for(const b of list){
+    try{ await SB.patch('batches','batch_code=eq.'+encodeURIComponent(b.bcode),{printed_at:t}); }catch(e){}
+  } }
 }
 $('#dayPrint').onclick=()=>{
   const all=todaysBatches();
@@ -2946,6 +2957,18 @@ $('#saveBackend').onclick=async()=>{
         : 'Could not connect: '+m.slice(0,60), true); } }
   else { render(); toast('Using this device only'); }
 };
+$('#refreshCloud').onclick=async()=>{
+  if(!SB.on){toast('Not connected to a shared database',true);return;}
+  try{ await SB.pull(); persistLocal(); render(); toast('Up to date — '+DB.items.length+' items, '+DB.moves.length+' movements'); }
+  catch(e){ toast('Could not refresh: '+String(e.message).slice(0,60),true); }
+};
+/* Coming back to the app after it has been in the background is exactly
+   when another device is most likely to have changed something. */
+document.addEventListener('visibilitychange',async()=>{
+  if(document.hidden||!SB.on||!SB.ok)return;
+  try{ await SB.pull(); persistLocal(); render(); }catch(e){}
+});
+
 $('#testBackend').onclick=async()=>{
   const u=$('#sbUrl').value.trim(),k=$('#sbKey').value.trim();
   if(!u||!k){toast('Fill in both the URL and the key',true);return;}
@@ -2959,9 +2982,11 @@ $('#pushLocal').onclick=async()=>{
   if(!confirm('Upload '+DB.items.length+' items, '+DB.batches.length+' batches and '+DB.moves.length+' movements to the shared database?'))return;
   try{
     if(DB.items.length) await SB.post('items',DB.items.map(i=>({code:i.code,name:i.name,category:i.cat,
-      unit:i.unit,min_qty:i.min,rate:i.rate,supplier:i.sup,location:i.loc,notes:i.note})));
+      unit:i.unit,min_qty:i.min,rate:i.rate,supplier:i.sup,location:i.loc,notes:i.note,
+      pack:i.pack||null,pack_qty:packSize(i)||0,whole_only:!!i.whole,tracked:!!i.serial,pack_set:!!i.packSet})));
     if(DB.batches.length) await SB.post('batches',DB.batches.map(b=>({batch_code:b.bcode,item_code:b.code,
-      vendor:b.ven||null,lot_no:b.lot||null,received_on:b.recv||null,expiry:b.exp||null,rate:b.rate||0})));
+      vendor:b.ven||null,lot_no:b.lot||null,received_on:b.recv||null,expiry:b.exp||null,rate:b.rate||0,
+      pack_size:b.qty0||0,printed_at:b.printed||null})));
     if(DB.moves.length) await SB.post('movements',DB.moves.map(m=>({id:m.id,item_code:m.code,
       batch_code:m.bcode||null,kind:m.type,qty:m.qty,note:m.note||null,operator:m.user||null,created_at:m.ts})));
     toast('Uploaded');
