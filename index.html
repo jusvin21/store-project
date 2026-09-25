@@ -900,10 +900,25 @@ body.smopen{overflow:hidden}
     </div>
     <div class="row mt">
       <button class="btn blue" id="saveBackend">Save &amp; connect</button>
+      <button class="btn ghost" id="cloudCount"
+        data-tip="Compare|Counts the rows on the server and on this device, so you can see at once if anything is missing.">Compare with cloud</button>
+      <button class="btn red" id="replaceCloud"
+        data-tip="Overwrite this device|Throws away anything on this device that is not on the server. Only use it if you are certain the server is right.">Replace this device from cloud</button>
       <button class="btn ghost" id="refreshCloud"
         data-tip="Get the latest|Pulls items, packs and movements from the shared database. Use it if another device has just made a change.">Refresh from cloud</button>
       <button class="btn ghost" id="testBackend" data-tip="Test the connection|Checks the URL and key without saving anything.">Test connection</button>
       <button class="btn ghost" id="pushLocal" data-tip="Upload once|Copies this device into the shared database. Run it from one device only, or codes will clash.">Upload this device to cloud</button>
+    </div>
+  </div>
+
+  <div class="card" id="qBox" style="display:none;border-left:5px solid var(--warn)">
+    <h2 class="sec">Waiting to sync</h2>
+    <p class="hint" id="qSum" style="margin:-6px 0 10px"></p>
+    <div id="qList"></div>
+    <div class="row mt">
+      <button class="btn sm" id="qNow">Send now</button>
+      <button class="btn red sm" id="qSkip" style="display:none"
+        data-tip="Discard the stuck change|Only if you are sure it is wrong. Everything behind it will then send.">Discard the stuck one</button>
     </div>
   </div>
 
@@ -948,6 +963,9 @@ body.smopen{overflow:hidden}
       <label class="f"><span>Fallback code prefix</span><input id="sPrefix" value="RM"
         data-tip="Fallback prefix|Used only when an item has no category, or its category has no rule."></label>
       <label class="f"><span>Currency symbol</span><input id="sCur" value="₹"></label>
+      <label class="f"><span>Check for changes every (seconds)</span>
+        <input id="sSync" type="number" min="1" max="60" value="1"
+        data-tip="How often this device asks for new entries|One second is fine — it only fetches what is new. Raise it if the connection is very weak."></label>
       <label class="f"><span>Expiry warning (days)</span><input id="sExp" type="number" min="1" value="30"></label>
       <label class="f"><span>Beep on scan</span><select id="sBeep"><option value="1">On</option><option value="0">Off</option></select></label>
       <label class="f"><span>Scan screen</span><select id="sSimple">
@@ -1102,7 +1120,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-08-10.24';
+const BUILD='2026-09-25.27';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1165,6 +1183,19 @@ const SB={
     'Content-Type':'application/json'},extra||{});},
   async get(path){const r=await fetch(sbBase(DB.settings.sbUrl)+'/rest/v1/'+path,{headers:this.h()});
     if(!r.ok)throw new Error(await r.text());return r.json();},
+  /* PostgREST caps a response at 1000 rows whatever limit you ask for, so
+     everything older than the first page used to be invisible here. Page
+     through it until the server returns a short page. */
+  async getAll(path,order){
+    const PAGE=1000, out=[];
+    for(let off=0; off<200000; off+=PAGE){
+      const url=path+(path.includes('?')?'&':'?')+'order='+order+'&limit='+PAGE+'&offset='+off;
+      const page=await this.get(url);
+      out.push(...page);
+      if(page.length<PAGE) break;
+    }
+    return out;
+  },
   async post(table,rows){const r=await fetch(sbBase(DB.settings.sbUrl)+'/rest/v1/'+table,
     {method:'POST',headers:this.h({'Prefer':'return=representation'}),body:JSON.stringify(rows)});
     if(!r.ok)throw new Error(await r.text());return r.json();},
@@ -1174,11 +1205,35 @@ const SB={
   async patch(table,q,row){const r=await fetch(sbBase(DB.settings.sbUrl)+'/rest/v1/'+table+'?'+q,
     {method:'PATCH',headers:this.h(),body:JSON.stringify(row)});
     if(!r.ok)throw new Error(await r.text());return true;},
-  async pull(){
+  /* A pull MERGES. A movement this device recorded is never removed just
+     because the server has not heard about it yet — it is queued for upload
+     instead. Only an explicit "Replace from cloud" overwrites. */
+  /* Just the movements that appeared since the newest one we hold. A few
+     hundred bytes, so it can run every second without choking a weak line. */
+  async catchUp(){
+    if(DB.outbox&&DB.outbox.length){ flushSoon(0); return 0; }
+    const newest=DB.moves.reduce((t,m)=>(m.ts>t?m.ts:t),'');
+    if(!newest) return -1;                       /* nothing local yet: needs a full pull */
+    const since=new Date(new Date(newest).getTime()-120000).toISOString();  /* 2 min overlap */
+    const rows=await this.getAll('movements?select=*&created_at=gte.'+encodeURIComponent(since),'created_at.asc');
+    const have=new Set(DB.moves.map(m=>m.id));
+    const fresh=rows.filter(r=>!have.has(r.id)).map(r=>({id:r.id,ts:r.created_at,bcode:r.batch_code||'',
+      code:r.item_code,type:r.kind,qty:+r.qty,note:r.note||'',user:r.operator||''}));
+    this.ok=true; lastTick=Date.now();
+    if(!fresh.length) return 0;
+    /* a movement against a pack we have not seen needs the packs refreshed too */
+    const unknown=fresh.some(m=>m.bcode&&!DB.batches.some(b=>b.bcode===m.bcode));
+    DB.moves=fresh.concat(DB.moves).sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+    if(unknown) return -1;
+    return fresh.length;
+  },
+  async pull(force){
+    if(!force && DB.outbox && DB.outbox.length){ flushSoon(0); return false; }
+    const prevItems=DB.items.slice(), prevBatches=DB.batches.slice(), prevMoves=DB.moves.slice();
     const [items,batches,moves]=await Promise.all([
-      this.get('items?select=*&order=name'),
-      this.get('batches?select=*&order=received_on.desc'),
-      this.get('movements?select=*&order=created_at.desc&limit=5000')]);
+      this.getAll('items?select=*','code.asc'),
+      this.getAll('batches?select=*','batch_code.asc'),
+      this.getAll('movements?select=*','created_at.desc')]);
     DB.items=items.map(r=>({code:r.code,name:r.name,cat:r.category||'',unit:r.unit||'pcs',
       min:+r.min_qty||0,rate:+r.rate||0,sup:r.supplier||'',loc:r.location||'',note:r.notes||'',
       pack:r.pack||'', packQty:+r.pack_qty||0,
@@ -1186,34 +1241,219 @@ const SB={
     DB.batches=batches.map(r=>({bcode:r.batch_code,code:r.item_code,ven:r.vendor||'',lot:r.lot_no||'',
       recv:r.received_on||'',exp:r.expiry||'',rate:+r.rate||0,
       qty0:+r.pack_size||0, printed:r.printed_at||null}));
-    DB.moves=moves.map(r=>({id:r.id,ts:r.created_at,bcode:r.batch_code||'',code:r.item_code,
+    const sMoves=moves.map(r=>({id:r.id,ts:r.created_at,bcode:r.batch_code||'',code:r.item_code,
       type:r.kind,qty:+r.qty,note:r.note||'',user:r.operator||''}));
-    this.ok=true;}
+    const sItems=DB.items, sBatches=DB.batches;   /* already mapped above */
+
+    if(force){ DB.moves=sMoves; this.ok=true; lastPull=Date.now(); return true; }
+
+    const tomb=new Set(DB.tomb||[]);
+    const onServer=new Set(sMoves.map(m=>m.id));
+    /* anything this device holds that the server does not, and that was not
+       deliberately deleted here, is ours to re-send — not to lose */
+    const orphans=(prevMoves||[]).filter(m=>!onServer.has(m.id)&&!tomb.has(m.id));
+    if(orphans.length){
+      orphans.forEach(m=>enqueue({t:'movements',k:'insert',key:'id',val:m.id,row:moveRow(m)}));
+      toast(orphans.length+' local entr'+(orphans.length===1?'y was':'ies were')+' missing from the cloud — re-sending',true);
+    }
+    const byId={}; sMoves.forEach(m=>byId[m.id]=m);
+    (prevMoves||[]).forEach(m=>{ if(!byId[m.id]&&!tomb.has(m.id)) byId[m.id]=m; });
+    DB.moves=Object.values(byId).sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+
+    /* same rule for items and packs: never drop a local-only record */
+    const sb=new Set(sBatches.map(b=>b.bcode));
+    (prevBatches||[]).forEach(b=>{ if(!sb.has(b.bcode)&&!tomb.has(b.bcode)){ DB.batches.push(b);
+      enqueue({t:'batches',k:'insert',key:'batch_code',val:b.bcode,row:batchRow(b)}); } });
+    const si=new Set(sItems.map(i=>i.code));
+    (prevItems||[]).forEach(i=>{ if(!si.has(i.code)&&!tomb.has(i.code)){ DB.items.push(i);
+      enqueue({t:'items',k:'insert',key:'code',val:i.code,row:itemRow(i)}); } });
+
+    this.ok=true; lastPull=Date.now(); return true;}
 };
 
 /* ---------- writes go through here ---------- */
+/* ============================================================
+   OUTBOX
+   Every write is queued on this device first and sent in order.
+   Nothing is dropped: if the network fails the queue waits and
+   retries. A pull never runs over unsent work, so a pack booked in
+   on a weak signal can no longer vanish from the device.
+   ============================================================ */
+const itemRow=it=>({code:it.code,name:it.name,category:it.cat,unit:it.unit,min_qty:it.min,
+  rate:it.rate,supplier:it.sup,location:it.loc,notes:it.note,
+  pack:it.pack||null,pack_qty:packSize(it)||0,
+  whole_only:!!it.whole,tracked:!!it.serial,pack_set:!!it.packSet});
+const batchRow=b=>({batch_code:b.bcode,item_code:b.code,vendor:b.ven||null,lot_no:b.lot||null,
+  received_on:b.recv||null,expiry:b.exp||null,rate:b.rate||0,
+  pack_size:b.qty0||0,printed_at:b.printed||null});
+const moveRow=m=>({id:m.id,item_code:m.code,batch_code:m.bcode||null,kind:m.type,
+  qty:m.qty,note:m.note||null,operator:m.user||null,created_at:m.ts});
+
+function outbox(){ return DB.outbox||(DB.outbox=[]); }
+function saveNow(){ clearTimeout(saveT); Local.save(DB); }   /* the queue must survive a crash */
+function enqueue(op){
+  if(!SB.on) return;
+  op.oid=uid(); op.tries=0; op.err=null; op.at=nowISO();
+  outbox().push(op); saveNow(); renderStatus();
+  flushSoon(0);
+}
+
 async function pushMove(mv){
   DB.moves.unshift(mv); persistLocal();
-  if(SB.on){ try{ await SB.post('movements',[{id:mv.id,item_code:mv.code,batch_code:mv.bcode||null,
-      kind:mv.type,qty:mv.qty,note:mv.note||null,operator:mv.user||null,created_at:mv.ts}]);}
-    catch(e){ toast('Saved here, but not to the cloud — check Setup',true); } }
+  enqueue({t:'movements',k:'insert',key:'id',val:mv.id,row:moveRow(mv)});
 }
 async function pushItem(it,isNew){
   persistLocal();
-  if(SB.on){ const row={code:it.code,name:it.name,category:it.cat,unit:it.unit,min_qty:it.min,
-      rate:it.rate,supplier:it.sup,location:it.loc,notes:it.note,
-      pack:it.pack||null, pack_qty:packSize(it)||0,
-      whole_only:!!it.whole, tracked:!!it.serial, pack_set:!!it.packSet};
-    try{ if(isNew) await SB.post('items',[row]); else await SB.patch('items','code=eq.'+encodeURIComponent(it.code),row);}
-    catch(e){ toast('Item not synced to cloud — check Setup',true);} }
+  enqueue({t:'items',k:isNew?'insert':'update',key:'code',val:it.code,row:itemRow(it)});
 }
 async function pushBatch(b){
   persistLocal();
-  if(SB.on){ try{ await SB.post('batches',[{batch_code:b.bcode,item_code:b.code,vendor:b.ven||null,
-      lot_no:b.lot||null,received_on:b.recv||null,expiry:b.exp||null,rate:b.rate||0,
-      pack_size:b.qty0||0, printed_at:b.printed||null}]);}
-    catch(e){ toast('Batch not synced to cloud',true);} }
+  enqueue({t:'batches',k:'insert',key:'batch_code',val:b.bcode,row:batchRow(b)});
 }
+function queueDelete(t,key,val){
+  DB.tomb=(DB.tomb||[]).concat([val]).slice(-4000);   /* remember it was meant to go */
+  enqueue({t,k:'delete',key,val});
+}
+function queuePatch(t,key,val,row){ enqueue({t,k:'update',key,val,row}); }
+
+/* one request, with the HTTP status kept so a conflict can be told apart
+   from a network failure */
+async function rawSend(op){
+  const base=sbBase(DB.settings.sbUrl)+'/rest/v1/'+op.t;
+  const q=op.key+'=eq.'+encodeURIComponent(op.val);
+  let url=base, method='POST', body=null, prefer='return=minimal';
+  if(op.k==='insert'){
+    body=JSON.stringify([op.row]);
+    /* a movement id is random, so a duplicate can only be our own retry */
+    if(op.t==='movements'){ url=base+'?on_conflict=id'; prefer='resolution=ignore-duplicates,return=minimal'; }
+  } else if(op.k==='update'){ url=base+'?'+q; method='PATCH'; body=JSON.stringify(op.row); }
+  else if(op.k==='delete'){ url=base+'?'+q; method='DELETE'; }
+  const r=await fetch(url,{method,headers:SB.h({'Prefer':prefer}),body});
+  let text=''; if(!r.ok){ try{text=await r.text();}catch(e){} }
+  return {ok:r.ok,status:r.status,text};
+}
+
+/* A batch code that already exists on the server is either our own earlier
+   attempt (same item, same size, same day) or another device that picked
+   the same next code while offline. Only the second is a real clash. */
+async function sameBatch(row){
+  try{
+    const got=await SB.get('batches?select=item_code,pack_size,received_on&batch_code=eq.'+encodeURIComponent(row.batch_code));
+    const g=got&&got[0]; if(!g) return false;
+    return g.item_code===row.item_code && (+g.pack_size||0)===(+row.pack_size||0)
+      && String(g.received_on||'')===String(row.received_on||'');
+  }catch(e){ return null; }
+}
+async function sameItem(row){
+  try{
+    const got=await SB.get('items?select=name&code=eq.'+encodeURIComponent(row.code));
+    return !!(got&&got[0]&&got[0].name===row.name);
+  }catch(e){ return null; }
+}
+
+/* Two devices booked in the same next code while one was offline. Give
+   ours a fresh code, move every reference across, and ask for a reprint. */
+async function resolveBatchClash(op){
+  let server=[];
+  try{ server=await SB.get('batches?select=batch_code&item_code=eq.'+encodeURIComponent(op.row.item_code)); }catch(e){}
+  const old=op.val;
+  const taken=new Set(server.map(r=>r.batch_code).concat(DB.batches.map(b=>b.bcode)));
+  const pre=op.row.item_code+'-';
+  let n=0,code;
+  do{ let t='',v=n; do{t=B36[v%36]+t;v=Math.floor(v/36);}while(v>0);
+      while(t.length<2)t='0'+t; code=pre+t; n++; }while(taken.has(code));
+  const b=DB.batches.find(x=>x.bcode===old);
+  if(b){ b.bcode=code; b.printed=null; }
+  DB.moves.forEach(m=>{ if(m.bcode===old) m.bcode=code; });
+  outbox().forEach(o=>{
+    if(o.val===old) o.val=code;
+    if(o.row&&o.row.batch_code===old) o.row.batch_code=code;
+  });
+  op.row.batch_code=code; op.val=code;
+  saveNow(); render();
+  alert('Code clash — another device had already used '+old+'.\n\n'
+    +'This pack has been renamed '+code+'.\n\n'
+    +'The label you printed for '+old+' is now wrong. Reprint it from Labels → Booked in today.');
+}
+
+let flushing=false, flushTimer=null, backoff=2000;
+let lastPull=0, lastTick=0, pullTimer=null, pulling=false;
+function pullSoon(ms){ clearTimeout(pullTimer); pullTimer=setTimeout(autoPull,ms); }
+async function autoPull(){
+  if(pulling||!SB.on||document.hidden||outbox().length) return;
+  /* do not yank the screen out from under someone mid-scan */
+  if(document.getElementById('scanModal').classList.contains('on')) return;
+  pulling=true;
+  try{ const done=await SB.pull(); if(done){ persistLocal(); render(); } }
+  catch(e){ SB.ok=false; renderStatus(); }
+  finally{ pulling=false; }
+}
+function flushSoon(ms){ clearTimeout(flushTimer); flushTimer=setTimeout(flush,ms); }
+
+async function flush(){
+  if(flushing||!SB.on) return;
+  const q=outbox(); if(!q.length){ backoff=2000; renderStatus(); return; }
+  flushing=true; renderStatus();
+  try{
+    while(q.length){
+      const op=q[0];
+      let res;
+      try{ res=await rawSend(op); }
+      catch(e){                                  /* no network: wait and retry */
+        op.tries++; SB.ok=false; saveNow();
+        backoff=Math.min(backoff*2,30000); flushSoon(backoff); return;
+      }
+      SB.ok=true;
+      if(res.ok){ q.shift(); saveNow(); backoff=2000; renderStatus(); continue; }
+
+      /* already there */
+      if(res.status===409||/23505|duplicate key/i.test(res.text)){
+        if(op.t==='batches'&&op.k==='insert'){
+          const same=await sameBatch(op.row);
+          if(same===null){ flushSoon(backoff); return; }
+          if(same){ q.shift(); saveNow(); continue; }
+          await resolveBatchClash(op); continue;     /* retry under the new code */
+        }
+        if(op.t==='items'&&op.k==='insert'){
+          const same=await sameItem(op.row);
+          if(same===null){ flushSoon(backoff); return; }
+          if(same){ q.shift(); saveNow(); continue; }
+          op.err='Item code '+op.val+' already belongs to a different item on another device';
+          saveNow(); renderStatus(); return;
+        }
+        q.shift(); saveNow(); continue;
+      }
+
+      /* anything else is a real refusal — keep it, stop, and say why */
+      op.tries++; op.err=(res.status+' '+res.text).slice(0,180);
+      saveNow(); renderStatus(); flushSoon(30000); return;
+    }
+  } finally { flushing=false; renderStatus(); }
+  pullSoon(500);                                 /* queue empty: now safe to catch up */
+}
+
+window.addEventListener('online',()=>{ backoff=2000; flushSoon(0); });
+/* send whenever there is something waiting; catch up with other devices
+   every few seconds when there is not */
+/* every second: send anything waiting, otherwise ask for new movements.
+   A full reconcile runs on the longer beat. */
+setInterval(async()=>{
+  if(!SB.on||pulling||document.hidden) return;
+  if(outbox().length){ if(!flushing) flush(); return; }
+  const every=Math.max(1000,+DB.settings.syncEvery||1000);
+  const full =Math.max(15000,+DB.settings.fullEvery||60000);
+  if(Date.now()-lastPull>full){ autoPull(); return; }
+  if(Date.now()-lastTick<every) return;
+  if(document.getElementById('scanModal').classList.contains('on')) return;
+  pulling=true;
+  try{
+    const n=await SB.catchUp();
+    if(n<0) { pulling=false; return autoPull(); }
+    if(n>0){ persistLocal(); render(); }
+    else renderStatus();
+  }catch(e){ SB.ok=false; renderStatus(); }
+  finally{ pulling=false; }
+},1000);
 
 /* ---------- derived stock ---------- */
 function stockMaps(){
@@ -1472,8 +1712,23 @@ async function handleCode(raw){
     show('bad',`<span class="tag err">Not recognised</span>
       <div class="rnm" style="margin-top:6px">Unknown code</div>
       <div class="rcd">${esc(code)}</div>
-      <div class="row mt"><button class="btn blue sm" id="qa">Create an item with this code</button></div>`);
+      ${SB.on?`<div class="rcd" style="margin-top:8px">It may have been booked in on another device and not reached
+        this one yet.</div>`:''}
+      <div class="bigrow">
+        ${SB.on?`<button class="big grey" id="qb" style="font-size:15px">Check the cloud<small>and scan again</small></button>`:''}
+        <button class="big grey" id="qa" style="font-size:15px">New item<small>with this code</small></button>
+      </div>`);
     $('#qa').onclick=()=>{closeScanModal();go('items');resetItemForm();$('#fCode').value=code;$('#fName').focus();};
+    if(SB.on) $('#qb').onclick=async()=>{
+      if(outbox().length){ await flush(); }
+      try{ await SB.pull(true); persistLocal(); render(); }catch(e){ toast('Could not reach the cloud',true); return; }
+      closeScanModal();
+      if(resolve(code)) handleCode(code);
+      else show('bad',`<span class="tag err">Still not found</span>
+        <div class="rnm" style="margin-top:6px">${esc(code)}</div>
+        <div class="rcd" style="margin-top:8px">Not on the server either. If it was booked in on another device,
+          that device has not sent it yet — check its sync status.</div>`);
+    };
     return;
   }
   const it=res.item, b=res.batch;
@@ -2498,9 +2753,7 @@ async function markPrinted(list){
   const t=nowISO();
   list.forEach(b=>{ b.printed=t; });
   persistLocal(); render();
-  if(SB.on){ for(const b of list){
-    try{ await SB.patch('batches','batch_code=eq.'+encodeURIComponent(b.bcode),{printed_at:t}); }catch(e){}
-  } }
+  list.forEach(b=>queuePatch('batches','batch_code',b.bcode,{printed_at:t}));
 }
 $('#dayPrint').onclick=()=>{
   const all=todaysBatches();
@@ -2685,9 +2938,7 @@ $('#bulkGo').onclick=async()=>{
   }
   if(!made.length){toast('Nothing new to add',true);$('#bulkHint').textContent=skipped.length+' name(s) already exist.';return;}
   DB.items.push(...made); persistLocal();
-  if(SB.on){ try{ await SB.post('items',made.map(i=>({code:i.code,name:i.name,category:i.cat,unit:i.unit,
-      min_qty:i.min,rate:i.rate,supplier:i.sup,location:i.loc,notes:i.note}))); }
-    catch(e){ toast('Created here, but not synced to cloud',true); } }
+  made.forEach(i=>pushItem(i,true));
   $('#bulkTxt').value='';
   $('#bulkHint').textContent='Created '+made.length+' item'+(made.length===1?'':'s')+
     (skipped.length?', skipped '+skipped.length+' already present':'')+'. Codes '+made[0].code+' to '+made[made.length-1].code+'.';
@@ -2922,6 +3173,7 @@ $('#bkFile').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new Fil
   r.onload=()=>{try{const d=JSON.parse(r.result);if(!Array.isArray(d.items))throw 0;
     if(!confirm('Replace everything on this device?\n'+d.items.length+' items, '+(d.moves||[]).length+' movements.'))return;
     DB={items:d.items,batches:d.batches||[],moves:d.moves||[],seq:d.seq||d.items.length+1,
+      outbox:DB.outbox||[],
       settings:Object.assign(DB.settings,d.settings||{})};
     persistLocal();loadSettings();render();toast('Restored');}catch(x){toast('Not a valid backup',true);}};
   r.readAsText(f);e.target.value='';};
@@ -2930,7 +3182,7 @@ $('#bkWipe').onclick=()=>$('#clrAll').click();
 /* ---------- settings / backend ---------- */
 function loadSettings(){const s=DB.settings;
   $('#sUser').value=s.user||'';$('#sPrefix').value=s.prefix;$('#sCur').value=s.cur;
-  $('#sExp').value=s.expDays;$('#sBeep').value=String(s.beep);$('#sSimple').value=String(s.simple||0);
+  $('#sExp').value=s.expDays; $('#sSync').value=Math.round((s.syncEvery||1000)/1000);$('#sBeep').value=String(s.beep);$('#sSimple').value=String(s.simple||0);
   document.body.classList.toggle('simple',!!+s.simple);
   $('#backend').value=s.backend;$('#sbUrl').value=s.sbUrl||'';$('#sbKey').value=s.sbKey||'';
   $('#cloudCfg').style.display=s.backend==='cloud'?'':'none';}
@@ -2957,16 +3209,49 @@ $('#saveBackend').onclick=async()=>{
         : 'Could not connect: '+m.slice(0,60), true); } }
   else { render(); toast('Using this device only'); }
 };
+$('#cloudCount').onclick=async()=>{
+  if(!SB.on){toast('Not connected',true);return;}
+  toast('Counting…');
+  try{
+    const [i,b,m]=await Promise.all([
+      SB.getAll('items?select=code','code.asc'),
+      SB.getAll('batches?select=batch_code','batch_code.asc'),
+      SB.getAll('movements?select=id','created_at.desc')]);
+    const gap=(a,c)=>a===c?'match':(a>c?(a-c)+' only on the server':(c-a)+' only on this device');
+    alert('Server  vs  this device\n\n'
+      +'Items       '+String(i.length).padStart(6)+'  '+String(DB.items.length).padStart(6)+'   '+gap(i.length,DB.items.length)+'\n'
+      +'Packs       '+String(b.length).padStart(6)+'  '+String(DB.batches.length).padStart(6)+'   '+gap(b.length,DB.batches.length)+'\n'
+      +'Movements   '+String(m.length).padStart(6)+'  '+String(DB.moves.length).padStart(6)+'   '+gap(m.length,DB.moves.length)
+      +'\n\nIf the server has more, press Refresh from cloud.');
+  }catch(e){ toast('Could not count: '+String(e.message).slice(0,60),true); }
+};
+$('#replaceCloud').onclick=async()=>{
+  if(!SB.on){toast('Not connected',true);return;}
+  if(!confirm('Throw away anything on THIS DEVICE that is not on the server?\n\n'
+    +DB.items.length+' items, '+DB.batches.length+' packs, '+DB.moves.length+' movements here.\n'
+    +(outbox().length?outbox().length+' change(s) still waiting to send WILL BE LOST.\n':'')
+    +'\nDownload a backup first if you are unsure.'))return;
+  DB.outbox=[]; saveNow();
+  try{ await SB.pull(true); persistLocal(); render(); toast('Replaced from the cloud'); }
+  catch(e){ toast('Could not reach the cloud',true); }
+};
+$('#qNow').onclick=()=>{ outbox().forEach(o=>o.err=null); backoff=2000; flushSoon(0); toast('Sending…'); };
+$('#qSkip').onclick=()=>{
+  const q=outbox(), i=q.findIndex(o=>o.err); if(i<0)return;
+  if(!confirm('Discard this change?\n\n'+q[i].k+' '+q[i].t+' · '+q[i].val+'\n\n'+q[i].err))return;
+  q.splice(i,1); saveNow(); renderStatus(); flushSoon(0);
+};
 $('#refreshCloud').onclick=async()=>{
   if(!SB.on){toast('Not connected to a shared database',true);return;}
+  if(outbox().length){ toast(outbox().length+' change'+(outbox().length===1?' is':'s are')+' still sending — refreshing after that',true); flushSoon(0); return; }
   try{ await SB.pull(); persistLocal(); render(); toast('Up to date — '+DB.items.length+' items, '+DB.moves.length+' movements'); }
   catch(e){ toast('Could not refresh: '+String(e.message).slice(0,60),true); }
 };
 /* Coming back to the app after it has been in the background is exactly
    when another device is most likely to have changed something. */
-document.addEventListener('visibilitychange',async()=>{
-  if(document.hidden||!SB.on||!SB.ok)return;
-  try{ await SB.pull(); persistLocal(); render(); }catch(e){}
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden||!SB.on)return;
+  if(outbox().length) flushSoon(0); else pullSoon(200);
 });
 
 $('#testBackend').onclick=async()=>{
@@ -2980,17 +3265,11 @@ $('#testBackend').onclick=async()=>{
 $('#pushLocal').onclick=async()=>{
   if(!SB.on){toast('Set up the shared database first',true);return;}
   if(!confirm('Upload '+DB.items.length+' items, '+DB.batches.length+' batches and '+DB.moves.length+' movements to the shared database?'))return;
-  try{
-    if(DB.items.length) await SB.post('items',DB.items.map(i=>({code:i.code,name:i.name,category:i.cat,
-      unit:i.unit,min_qty:i.min,rate:i.rate,supplier:i.sup,location:i.loc,notes:i.note,
-      pack:i.pack||null,pack_qty:packSize(i)||0,whole_only:!!i.whole,tracked:!!i.serial,pack_set:!!i.packSet})));
-    if(DB.batches.length) await SB.post('batches',DB.batches.map(b=>({batch_code:b.bcode,item_code:b.code,
-      vendor:b.ven||null,lot_no:b.lot||null,received_on:b.recv||null,expiry:b.exp||null,rate:b.rate||0,
-      pack_size:b.qty0||0,printed_at:b.printed||null})));
-    if(DB.moves.length) await SB.post('movements',DB.moves.map(m=>({id:m.id,item_code:m.code,
-      batch_code:m.bcode||null,kind:m.type,qty:m.qty,note:m.note||null,operator:m.user||null,created_at:m.ts})));
-    toast('Uploaded');
-  }catch(e){toast('Upload failed: '+String(e.message).slice(0,70),true);}
+  /* queued in dependency order: items, then packs, then movements */
+  DB.items.forEach(i=>enqueue({t:'items',k:'insert',key:'code',val:i.code,row:itemRow(i)}));
+  DB.batches.forEach(b=>enqueue({t:'batches',k:'insert',key:'batch_code',val:b.bcode,row:batchRow(b)}));
+  DB.moves.slice().reverse().forEach(m=>enqueue({t:'movements',k:'insert',key:'id',val:m.id,row:moveRow(m)}));
+  toast('Queued '+outbox().length+' records — they will send as the connection allows');
 };
 
 /* ============================================================
@@ -3234,14 +3513,12 @@ function renderItems(){
     DB.batches=DB.batches.filter(x=>x.code!==it.code);
     DB.items=DB.items.filter(x=>x.code!==it.code);
     persistLocal();
-    if(SB.on){
-      try{
-        await SB.del('movements','item_code=eq.'+encodeURIComponent(it.code));
-        await SB.del('batches','item_code=eq.'+encodeURIComponent(it.code));
-        await SB.del('items','code=eq.'+encodeURIComponent(it.code));
-        toast('Deleted here and in the cloud');
-      }catch(e){ toast('Deleted here — the cloud refused, see the note',true); cloudDeleteHelp(); }
-    } else toast('Deleted '+it.code);
+    /* anything still queued for this item is now pointless */
+    DB.outbox=outbox().filter(o=>!(o.val===it.code||(o.row&&o.row.item_code===it.code)||codes.includes(o.val)));
+    queueDelete('movements','item_code',it.code);
+    queueDelete('batches','item_code',it.code);
+    queueDelete('items','code',it.code);
+    toast('Deleted '+it.code+(SB.on?' — removing from the cloud':''));
     resetItemForm(); lastMove=null; render();
   });
   const opts=DB.items.slice().sort((a,b)=>a.name.localeCompare(b.name))
@@ -3353,13 +3630,15 @@ function renderLog(){
     DB.moves=DB.moves.filter(x=>x.id!==m.id);
     if(orphan && confirm('The pack '+orphan+' was created by that entry and has no other movements.\n\nRemove the pack as well?')){
       DB.batches=DB.batches.filter(x=>x.bcode!==orphan);
-      if(SB.on){ try{ await SB.del('batches','batch_code=eq.'+encodeURIComponent(orphan)); }catch(e){} }
+      queueDelete('batches','batch_code',orphan);
     }
     persistLocal();
-    if(SB.on){
-      try{ await SB.del('movements','id=eq.'+encodeURIComponent(m.id)); toast('Deleted here and in the cloud'); }
-      catch(e){ toast('Deleted here — the cloud refused, see Setup',true); cloudDeleteHelp(); }
-    } else toast('Entry deleted');
+    /* never sent? then just withdraw it instead of sending then deleting */
+    DB.tomb=(DB.tomb||[]).concat([m.id]).slice(-4000);
+    const pend=outbox().findIndex(o=>o.t==='movements'&&o.k==='insert'&&o.val===m.id);
+    if(pend>=0){ outbox().splice(pend,1); saveNow(); }
+    else queueDelete('movements','id',m.id);
+    toast('Entry deleted');
     lastMove=null; render();
   });
   $$('#tLog [data-r]').forEach(b=>b.onclick=async()=>{
@@ -3374,7 +3653,12 @@ function renderLog(){
 
 function renderStatus(){
   let txt,cls;
-  if(SB.on&&SB.ok){txt='Shared database';cls='';}
+  const q=(DB.outbox||[]);
+  const blocked=q.find(o=>o.err);
+  if(SB.on&&blocked){txt='Sync stopped — see Setup';cls='bad';}
+  else if(SB.on&&q.length&&(!SB.ok||!navigator.onLine)){txt='Offline · '+q.length+' waiting';cls='warn';}
+  else if(SB.on&&q.length){txt='Sending '+q.length+'…';cls='warn';}
+  else if(SB.on&&SB.ok){txt='All synced';cls='';}
   else if(SB.on){txt='Cloud not reachable';cls='bad';}
   else if(localMode==='memory'){txt='Not saving';cls='bad';}
   else {txt='This device only';cls='warn';}
@@ -3383,6 +3667,21 @@ function renderStatus(){
   const bt=document.getElementById('stBuild'); if(bt) bt.textContent='build '+BUILD;
   const b2=document.getElementById('stBuild2'); if(b2) b2.textContent=BUILD;
   $('#beHint').textContent = SB.on ? (SB.ok?'Connected.':'Not connected — check the URL and key.') : 'Data stays in this browser.';
+  const qb=document.getElementById('qBox');
+  if(qb){
+    if(!q.length){ qb.style.display='none'; }
+    else {
+      qb.style.display='';
+      document.getElementById('qSum').innerHTML = blocked
+        ? '<b style="color:var(--error)">Sync stopped.</b> The server refused: <span class="code">'+esc(blocked.err)+'</span>'
+        : '<b>'+q.length+'</b> change'+(q.length===1?'':'s')+' waiting to send. They are safe on this device and will go as soon as the connection allows.';
+      document.getElementById('qList').innerHTML=q.slice(0,12).map(o=>
+        '<div class="code" style="font-size:12px;padding:3px 0'+(o.err?';color:var(--error)':'')+'">'
+        +esc(o.k)+' '+esc(o.t)+' · '+esc(o.val)+(o.tries?' · tried '+o.tries+'×':'')+'</div>').join('')
+        +(q.length>12?'<div class="hint">…and '+(q.length-12)+' more</div>':'');
+      document.getElementById('qSkip').style.display = blocked ? '' : 'none';
+    }
+  }
 }
 function render(){renderStock();renderItems();dPackShow();renderLabels();renderLog();renderCats();renderClear();renderStatus();previewCode();}
 
@@ -3406,12 +3705,16 @@ function render(){renderStock();renderItems();dPackShow();renderLabels();renderL
   const s=await Local.load();
   if(s&&Array.isArray(s.items)){
     DB={items:s.items,batches:s.batches||[],moves:s.moves||[],seq:s.seq||s.items.length+1,
+        outbox:s.outbox||[], tomb:s.tomb||[],
         settings:Object.assign(DB.settings,s.settings||{})};
   }
   loadSettings(); loadSheet();
   document.body.classList.toggle('simple',!!+DB.settings.simple);
   paintNav();
-  if(SB.on){ try{ await SB.pull(); persistLocal(); }catch(e){ toast('Cloud unreachable — using this device',true); } }
+  if(SB.on){
+    if(outbox().length){ toast(outbox().length+' change'+(outbox().length===1?'':'s')+' from last time still to send — sending now'); flushSoon(300); }
+    else { try{ await SB.pull(); persistLocal(); }catch(e){ toast('Cloud unreachable — using this device',true); } }
+  }
   render();
   if(!isTouch()) $('#scanInput').focus();
 })();
