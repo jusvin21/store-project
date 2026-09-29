@@ -872,12 +872,22 @@ body.smopen{overflow:hidden}
 <section class="view" id="v-log">
   <div class="card">
     <div class="row spread" style="margin-bottom:10px">
-      <input id="qm" class="txt" placeholder="Search log…" style="min-width:200px;flex:1">
+      <div class="srch" style="min-width:200px"><span class="ic">&#9906;</span>
+        <input id="qm" placeholder="Search item, code, vendor, note, date…" autocomplete="off">
+        <button id="qmClear" aria-label="Clear" title="Clear">&#10005;</button></div>
+      <label class="lsel" style="gap:6px">From <input type="date" id="logFrom" class="txt" style="padding:8px 10px"></label>
+      <label class="lsel" style="gap:6px">To <input type="date" id="logTo" class="txt" style="padding:8px 10px"></label>
+      <button class="btn ghost sm" id="logReset">Clear</button>
       <button class="btn ghost sm" id="csvLog" data-tip="Export the log|Every movement ever recorded, with time and operator. Your audit trail.">CSV</button>
     </div>
     <div class="tablewrap"><table id="tLog"><thead><tr>
       <th>When</th><th>Code</th><th>Item</th><th>Type</th><th class="num">Qty</th><th>By</th><th>Note</th><th></th><th></th>
     </tr></thead><tbody></tbody></table></div>
+    <div class="row mt" id="logMoreRow" style="display:none;justify-content:center;gap:10px">
+      <button class="btn ghost" id="logMore">Show 500 more</button>
+      <button class="btn ghost" id="logAll">Show all</button>
+    </div>
+    <div class="hint" id="logCount" style="text-align:center;margin-top:10px"></div>
     <div class="empty" id="eLog" style="display:none"><b>No movements</b>Every scan is recorded here and never deleted.</div>
   </div>
 </section>
@@ -918,7 +928,7 @@ body.smopen{overflow:hidden}
     <div class="row mt">
       <button class="btn sm" id="qNow">Send now</button>
       <button class="btn red sm" id="qSkip" style="display:none"
-        data-tip="Discard the stuck change|Only if you are sure it is wrong. Everything behind it will then send.">Discard the stuck one</button>
+        data-tip="Discard the stuck change|Only if you are sure it is wrong. Everything behind it will then send.">Discard the refused ones</button>
     </div>
   </div>
 
@@ -1120,7 +1130,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-09-25.27';
+const BUILD='2026-09-29.29';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1266,7 +1276,7 @@ const SB={
       enqueue({t:'batches',k:'insert',key:'batch_code',val:b.bcode,row:batchRow(b)}); } });
     const si=new Set(sItems.map(i=>i.code));
     (prevItems||[]).forEach(i=>{ if(!si.has(i.code)&&!tomb.has(i.code)){ DB.items.push(i);
-      enqueue({t:'items',k:'insert',key:'code',val:i.code,row:itemRow(i)}); } });
+      enqueue({t:'items',k:'upsert',key:'code',val:i.code,row:itemRow(i)}); } });
 
     this.ok=true; lastPull=Date.now(); return true;}
 };
@@ -1304,7 +1314,7 @@ async function pushMove(mv){
 }
 async function pushItem(it,isNew){
   persistLocal();
-  enqueue({t:'items',k:isNew?'insert':'update',key:'code',val:it.code,row:itemRow(it)});
+  enqueue({t:'items',k:'upsert',key:'code',val:it.code,row:itemRow(it)});
 }
 async function pushBatch(b){
   persistLocal();
@@ -1322,10 +1332,11 @@ async function rawSend(op){
   const base=sbBase(DB.settings.sbUrl)+'/rest/v1/'+op.t;
   const q=op.key+'=eq.'+encodeURIComponent(op.val);
   let url=base, method='POST', body=null, prefer='return=minimal';
-  if(op.k==='insert'){
+  if(op.k==='insert'||op.k==='upsert'){
     body=JSON.stringify([op.row]);
     /* a movement id is random, so a duplicate can only be our own retry */
     if(op.t==='movements'){ url=base+'?on_conflict=id'; prefer='resolution=ignore-duplicates,return=minimal'; }
+    else if(op.k==='upsert'){ url=base+'?on_conflict='+op.key; prefer='resolution=merge-duplicates,return=minimal'; }
   } else if(op.k==='update'){ url=base+'?'+q; method='PATCH'; body=JSON.stringify(op.row); }
   else if(op.k==='delete'){ url=base+'?'+q; method='DELETE'; }
   const r=await fetch(url,{method,headers:SB.h({'Prefer':prefer}),body});
@@ -1410,23 +1421,20 @@ async function flush(){
       if(res.status===409||/23505|duplicate key/i.test(res.text)){
         if(op.t==='batches'&&op.k==='insert'){
           const same=await sameBatch(op.row);
-          if(same===null){ flushSoon(backoff); return; }
+          if(same===null){ flushSoon(backoff); return; }   /* network, not a refusal */
           if(same){ q.shift(); saveNow(); continue; }
           await resolveBatchClash(op); continue;     /* retry under the new code */
         }
-        if(op.t==='items'&&op.k==='insert'){
-          const same=await sameItem(op.row);
-          if(same===null){ flushSoon(backoff); return; }
-          if(same){ q.shift(); saveNow(); continue; }
-          op.err='Item code '+op.val+' already belongs to a different item on another device';
-          saveNow(); renderStatus(); return;
-        }
+        if(op.t==='items'){ op.k='upsert'; saveNow(); continue; }   /* ours: just update it */
         q.shift(); saveNow(); continue;
       }
 
-      /* anything else is a real refusal — keep it, stop, and say why */
+      /* A refusal on one record must not hold up the other 474. Set it
+         aside so everything behind it keeps flowing, and show it in Setup. */
       op.tries++; op.err=(res.status+' '+res.text).slice(0,180);
-      saveNow(); renderStatus(); flushSoon(30000); return;
+      q.shift();
+      DB.stuck=(DB.stuck||[]).concat([op]).slice(-500);
+      saveNow(); renderStatus(); continue;
     }
   } finally { flushing=false; renderStatus(); }
   pullSoon(500);                                 /* queue empty: now safe to catch up */
@@ -3235,11 +3243,18 @@ $('#replaceCloud').onclick=async()=>{
   try{ await SB.pull(true); persistLocal(); render(); toast('Replaced from the cloud'); }
   catch(e){ toast('Could not reach the cloud',true); }
 };
-$('#qNow').onclick=()=>{ outbox().forEach(o=>o.err=null); backoff=2000; flushSoon(0); toast('Sending…'); };
+$('#qNow').onclick=()=>{
+  /* put anything set aside back in the queue and try the lot again */
+  const back=(DB.stuck||[]); back.forEach(o=>{o.err=null;o.tries=0;if(o.t==='items')o.k='upsert';});
+  DB.outbox=back.concat(outbox()); DB.stuck=[];
+  outbox().forEach(o=>o.err=null); backoff=2000; saveNow(); flushSoon(0);
+  toast('Retrying '+outbox().length+' change'+(outbox().length===1?'':'s'));
+};
 $('#qSkip').onclick=()=>{
-  const q=outbox(), i=q.findIndex(o=>o.err); if(i<0)return;
-  if(!confirm('Discard this change?\n\n'+q[i].k+' '+q[i].t+' · '+q[i].val+'\n\n'+q[i].err))return;
-  q.splice(i,1); saveNow(); renderStatus(); flushSoon(0);
+  const st=(DB.stuck||[]); if(!st.length)return;
+  if(!confirm('Discard all '+st.length+' record'+(st.length===1?'':'s')+' the server refused?\n\n'
+    +'They stay on this device but will never be sent.\nDownload a backup first if you are unsure.'))return;
+  DB.stuck=[]; saveNow(); renderStatus();
 };
 $('#refreshCloud').onclick=async()=>{
   if(!SB.on){toast('Not connected to a shared database',true);return;}
@@ -3266,7 +3281,7 @@ $('#pushLocal').onclick=async()=>{
   if(!SB.on){toast('Set up the shared database first',true);return;}
   if(!confirm('Upload '+DB.items.length+' items, '+DB.batches.length+' batches and '+DB.moves.length+' movements to the shared database?'))return;
   /* queued in dependency order: items, then packs, then movements */
-  DB.items.forEach(i=>enqueue({t:'items',k:'insert',key:'code',val:i.code,row:itemRow(i)}));
+  DB.items.forEach(i=>enqueue({t:'items',k:'upsert',key:'code',val:i.code,row:itemRow(i)}));
   DB.batches.forEach(b=>enqueue({t:'batches',k:'insert',key:'batch_code',val:b.bcode,row:batchRow(b)}));
   DB.moves.slice().reverse().forEach(m=>enqueue({t:'movements',k:'insert',key:'id',val:m.id,row:moveRow(m)}));
   toast('Queued '+outbox().length+' records — they will send as the connection allows');
@@ -3280,8 +3295,16 @@ const whenStr=iso=>{const d=new Date(iso);
   return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short'})+' '+
          d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit',hour12:false});};
 
-$('#q').oninput=renderStock; $('#fLow').onchange=renderStock; $('#qm').oninput=renderLog;
+$('#q').oninput=renderStock; $('#fLow').onchange=renderStock; $('#qm').oninput=()=>{logShow=500;renderLog();};
 $('#fExp').onchange=renderStock;
+['logFrom','logTo'].forEach(id=>{const el=$('#'+id); if(el) el.oninput=()=>{logShow=500;renderLog();};});
+if($('#qmClear')) $('#qmClear').onclick=()=>{ $('#qm').value=''; logShow=500; renderLog(); $('#qm').focus(); };
+if($('#logReset')) $('#logReset').onclick=()=>{ $('#qm').value=''; $('#logFrom').value=''; $('#logTo').value='';
+  logShow=500; renderLog(); };
+if($('#logMore')) $('#logMore').onclick=()=>{ logShow+=500; renderLog(); };
+if($('#logAll'))  $('#logAll').onclick=()=>{
+  if(DB.moves.length>4000&&!confirm('Show all '+DB.moves.length+' entries?\n\nThis can make the page slow on a phone.'))return;
+  logShow=1e9; renderLog(); };
 $('#fGroup').onchange=renderStock;
 $('#qClear').onclick=()=>{ $('#q').value=''; renderStock(); $('#q').focus(); };
 /* "/" focuses search from anywhere, the way every list tool works */
@@ -3478,7 +3501,9 @@ $('#orderCsv').onclick=()=>{
 function tileAction(t){
   if(t.go){ go(t.go); return; }
   if(t.act==='order'){ go('order'); return; }
-  if(t.act==='today'){ go('log'); $('#qm').value=today(); renderLog(); return; }
+  if(t.act==='today'){ go('log'); $('#qm').value='';
+    if($('#logFrom')){$('#logFrom').value=today();$('#logTo').value=today();}
+    logShow=500; renderLog(); return; }
   if(t.act==='openBatches'){ go('labels');
     $('#lblKind').value='batch'; $('#lblWhen').value='open';
     if($('#lq')){$('#lq').value='';$('#lFrom').value='';$('#lTo').value='';}
@@ -3597,11 +3622,20 @@ function renderLabels(){
   else if(shown===0){ $('#eLbl').innerHTML='<b>Nothing to print yet</b>Book in a delivery first.'; }
 }
 
+let logShow=500;
 function renderLog(){
   const q=$('#qm').value.trim().toLowerCase();
-  const rows=DB.moves.filter(m=>!q||
-    [m.code,m.bcode,m.type,m.note,m.user,(item(m.code)||{}).name||'',
-     m.ts,whenStr(m.ts)].join(' ').toLowerCase().includes(q)).slice(0,500);
+  const from=$('#logFrom')?$('#logFrom').value:'', to=$('#logTo')?$('#logTo').value:'';
+  const all=DB.moves.filter(m=>{
+    const day=String(m.ts).slice(0,10);
+    if(from&&day<from)return false;
+    if(to&&day>to)return false;
+    if(!q)return true;
+    return [m.code,m.bcode,m.type,m.note,m.user,(item(m.code)||{}).name||'',
+            m.ts,whenStr(m.ts)].join(' ').toLowerCase().includes(q);
+  });
+  const rows=all.slice(0,logShow);
+  if($('#qm')) $('#qm').closest('.srch').classList.toggle('has',!!q);
   $('#tLog tbody').innerHTML=rows.map(m=>{
     const t=m.type==='IN'?'in':m.type==='OUT'?'out':'adj';
     const sign=m.type==='OUT'?'−':m.type==='IN'?'+':(m.qty>=0?'+':'−');
@@ -3617,6 +3651,17 @@ function renderLog(){
             data-tip="Delete for good|Erases the entry completely. Nothing will show that it ever happened.">Delete</button></td></tr>`;}).join('');
   $('#eLog').style.display=DB.moves.length?'none':'';
   $('#tLog').style.display=DB.moves.length?'':'none';
+  /* the list is long on purpose — say how much of it you are looking at */
+  const more=all.length>rows.length;
+  if($('#logMoreRow')) $('#logMoreRow').style.display=more?'':'none';
+  if($('#logMore')) $('#logMore').textContent='Show '+Math.min(500,all.length-rows.length)+' more';
+  if($('#logCount')){
+    const oldest=all.length?whenStr(all[all.length-1].ts):'';
+    $('#logCount').innerHTML = !DB.moves.length ? ''
+      : (more ? 'Showing the newest <b>'+rows.length+'</b> of '+all.length+' entries'
+              : 'Showing all <b>'+all.length+'</b> entries'+(all.length?' · oldest '+esc(oldest):''))
+        +(all.length!==DB.moves.length?' · filtered from '+DB.moves.length:'');
+  }
   $$('#tLog [data-x]').forEach(b=>b.onclick=async()=>{
     const m=DB.moves.find(x=>x.id===b.dataset.x); if(!m)return;
     const it=item(m.code);
@@ -3654,8 +3699,10 @@ function renderLog(){
 function renderStatus(){
   let txt,cls;
   const q=(DB.outbox||[]);
-  const blocked=q.find(o=>o.err);
-  if(SB.on&&blocked){txt='Sync stopped — see Setup';cls='bad';}
+  const stuck=(DB.stuck||[]);
+  const blocked=stuck.length?stuck[0]:null;
+  if(SB.on&&q.length&&stuck.length){txt='Sending '+q.length+'… · '+stuck.length+' set aside';cls='warn';}
+  else if(SB.on&&stuck.length){txt=stuck.length+' could not send — see Setup';cls='warn';}
   else if(SB.on&&q.length&&(!SB.ok||!navigator.onLine)){txt='Offline · '+q.length+' waiting';cls='warn';}
   else if(SB.on&&q.length){txt='Sending '+q.length+'…';cls='warn';}
   else if(SB.on&&SB.ok){txt='All synced';cls='';}
@@ -3669,17 +3716,20 @@ function renderStatus(){
   $('#beHint').textContent = SB.on ? (SB.ok?'Connected.':'Not connected — check the URL and key.') : 'Data stays in this browser.';
   const qb=document.getElementById('qBox');
   if(qb){
-    if(!q.length){ qb.style.display='none'; }
+    if(!q.length&&!stuck.length){ qb.style.display='none'; }
     else {
       qb.style.display='';
-      document.getElementById('qSum').innerHTML = blocked
-        ? '<b style="color:var(--error)">Sync stopped.</b> The server refused: <span class="code">'+esc(blocked.err)+'</span>'
-        : '<b>'+q.length+'</b> change'+(q.length===1?'':'s')+' waiting to send. They are safe on this device and will go as soon as the connection allows.';
-      document.getElementById('qList').innerHTML=q.slice(0,12).map(o=>
-        '<div class="code" style="font-size:12px;padding:3px 0'+(o.err?';color:var(--error)':'')+'">'
-        +esc(o.k)+' '+esc(o.t)+' · '+esc(o.val)+(o.tries?' · tried '+o.tries+'×':'')+'</div>').join('')
-        +(q.length>12?'<div class="hint">…and '+(q.length-12)+' more</div>':'');
-      document.getElementById('qSkip').style.display = blocked ? '' : 'none';
+      document.getElementById('qSum').innerHTML =
+        (q.length?'<b>'+q.length+'</b> change'+(q.length===1?'':'s')+' waiting to send. They are safe on this device and go as soon as the connection allows.':'Everything queued has been sent.')
+        +(stuck.length?'<br><b style="color:var(--warn)">'+stuck.length+' record'+(stuck.length===1?'':'s')+' the server refused</b> — set aside so the rest could go through. Latest reason: <span class="code">'+esc(blocked.err||'')+'</span>':'');
+      document.getElementById('qList').innerHTML=
+        q.slice(0,8).map(o=>'<div class="code" style="font-size:12px;padding:3px 0">'
+          +esc(o.k)+' '+esc(o.t)+' · '+esc(o.val)+(o.tries?' · tried '+o.tries+'×':'')+'</div>').join('')
+        +(q.length>8?'<div class="hint">…and '+(q.length-8)+' more waiting</div>':'')
+        +stuck.slice(0,8).map(o=>'<div class="code" style="font-size:12px;padding:3px 0;color:var(--warn)">set aside · '
+          +esc(o.k)+' '+esc(o.t)+' · '+esc(o.val)+'</div>').join('')
+        +(stuck.length>8?'<div class="hint">…and '+(stuck.length-8)+' more set aside</div>':'');
+      document.getElementById('qSkip').style.display = stuck.length ? '' : 'none';
     }
   }
 }
@@ -3705,8 +3755,13 @@ function render(){renderStock();renderItems();dPackShow();renderLabels();renderL
   const s=await Local.load();
   if(s&&Array.isArray(s.items)){
     DB={items:s.items,batches:s.batches||[],moves:s.moves||[],seq:s.seq||s.items.length+1,
-        outbox:s.outbox||[], tomb:s.tomb||[],
+        outbox:s.outbox||[], tomb:s.tomb||[], stuck:s.stuck||[],
         settings:Object.assign(DB.settings,s.settings||{})};
+  }
+  /* Anything parked by an older build: items become updates, everything
+     else is simply retried. Nothing is discarded. */
+  if(DB.outbox&&DB.outbox.length){
+    DB.outbox.forEach(o=>{ if(o.err){ o.err=null; o.tries=0; if(o.t==='items') o.k='upsert'; } });
   }
   loadSettings(); loadSheet();
   document.body.classList.toggle('simple',!!+DB.settings.simple);
