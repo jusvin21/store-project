@@ -921,6 +921,16 @@ body.smopen{overflow:hidden}
     </div>
   </div>
 
+  <div class="card" id="renBox" style="display:none;border-left:5px solid var(--error)">
+    <h2 class="sec">Labels to reprint</h2>
+    <p class="hint" id="renSum" style="margin:-6px 0 10px"></p>
+    <div id="renList"></div>
+    <div class="row mt">
+      <button class="btn" id="renPrint">Print these labels</button>
+      <button class="btn ghost" id="renDone">Done — clear the list</button>
+    </div>
+  </div>
+
   <div class="card" id="qBox" style="display:none;border-left:5px solid var(--warn)">
     <h2 class="sec">Waiting to sync</h2>
     <p class="hint" id="qSum" style="margin:-6px 0 10px"></p>
@@ -969,6 +979,8 @@ body.smopen{overflow:hidden}
   <div class="card">
     <h2 class="sec">This device</h2>
     <div class="grid">
+      <label class="f"><span>This device's code letter</span><input id="sTag" maxlength="1" style="text-transform:uppercase"
+        data-tip="Keeps codes apart|Every device uses its own letter, so two of them can never invent the same pack code. Give each device a different one."></label>
       <label class="f"><span>Operator name (shown in log)</span><input id="sUser" placeholder="e.g. Store — Ramesh"></label>
       <label class="f"><span>Fallback code prefix</span><input id="sPrefix" value="RM"
         data-tip="Fallback prefix|Used only when an item has no category, or its category has no rule."></label>
@@ -1130,7 +1142,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-09-29.29';
+const BUILD='2026-09-29.30';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1381,10 +1393,11 @@ async function resolveBatchClash(op){
     if(o.row&&o.row.batch_code===old) o.row.batch_code=code;
   });
   op.row.batch_code=code; op.val=code;
+  /* collected quietly — an alert here would freeze the queue until
+     somebody tapped OK, which is worse than the clash itself */
+  DB.renamed=(DB.renamed||[]).concat([{from:old,to:code,at:nowISO()}]).slice(-200);
   saveNow(); render();
-  alert('Code clash — another device had already used '+old+'.\n\n'
-    +'This pack has been renamed '+code+'.\n\n'
-    +'The label you printed for '+old+' is now wrong. Reprint it from Labels → Booked in today.');
+  toast((DB.renamed.length)+' pack'+(DB.renamed.length===1?'':'s')+' renamed — reprint needed',true);
 }
 
 let flushing=false, flushTimer=null, backoff=2000;
@@ -1570,7 +1583,34 @@ const catDot=n=>`<span class="cdot" style="background:${esc(catCol(n))}"></span>
 const catChip=n=>n?`<span class="cchip" style="--cc:${esc(catCol(n))}">${esc(n)}</span>`:'<span style="opacity:.5">—</span>';
 
 const B36='0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+/* Each device owns a letter. Codes become RM-0090-A0, -A1 … on this
+   device and -B0, -B1 … on the next, so two devices can no longer pick
+   the same next code however out of date either of them is. */
+function devTag(){
+  let t=DB.settings.devTag;
+  if(!t||!/^[A-Z]$/.test(t)){
+    t='ABCDEFGHJKLMNPQRSTUVWXYZ'[Math.floor(Math.random()*24)];
+    DB.settings.devTag=t; persistLocal();
+  }
+  return t;
+}
 function nextBatchCode(icode){
+  const tag=devTag();
+  const pre=icode+'-'+tag;
+  let max=-1;
+  DB.batches.forEach(b=>{
+    if(b.bcode.indexOf(pre)!==0)return;
+    const tail=b.bcode.slice(pre.length);
+    if(!/^[0-9A-Z]{1,2}$/.test(tail))return;
+    let v=0; for(const ch of tail){const d=B36.indexOf(ch); if(d<0)return; v=v*36+d;}
+    if(v>max)max=v;
+  });
+  let n=max+1,c;
+  do{ let t='',v=n; do{t=B36[v%36]+t;v=Math.floor(v/36);}while(v>0);
+      c=pre+t; n++; }while(batch(c));
+  return c;
+}
+function nextBatchCodeOld(icode){
   const pre=icode+'-';
   let max=-1;
   DB.batches.forEach(b=>{
@@ -2517,6 +2557,15 @@ $('#saveDel').onclick=async()=>{
   }
   if(isWhole(it)&&typed%1!==0){toast(it.name+' comes in whole '+packName(it,2)+' — enter a whole number',true);$('#dQty').focus();return;}
   const d=$('#dDate').value||today();
+  /* cheap guard: pull this item's known packs first so the numbering
+     starts past anything another device has already used */
+  if(SB.on&&navigator.onLine&&!outbox().length){
+    try{
+      const rows=await SB.getAll('batches?select=batch_code&item_code=eq.'+encodeURIComponent(it.code),'batch_code.asc');
+      rows.forEach(r=>{ if(!DB.batches.some(b=>b.bcode===r.batch_code))
+        DB.batches.push({bcode:r.batch_code,code:it.code,qty0:0,recv:''}); });
+    }catch(e){}
+  }
   const meta={ven:$('#dVen').value.trim(),lot:$('#dLot').value.trim(),
     recv:d,exp:$('#dExp').value,rate:numv($('#dRate').value)};
   const note='Delivery'+(meta.ven?' from '+meta.ven:'')+(meta.lot?' · lot '+meta.lot:'');
@@ -3189,7 +3238,7 @@ $('#bkWipe').onclick=()=>$('#clrAll').click();
 
 /* ---------- settings / backend ---------- */
 function loadSettings(){const s=DB.settings;
-  $('#sUser').value=s.user||'';$('#sPrefix').value=s.prefix;$('#sCur').value=s.cur;
+  $('#sUser').value=s.user||''; $('#sTag').value=devTag();$('#sPrefix').value=s.prefix;$('#sCur').value=s.cur;
   $('#sExp').value=s.expDays; $('#sSync').value=Math.round((s.syncEvery||1000)/1000);$('#sBeep').value=String(s.beep);$('#sSimple').value=String(s.simple||0);
   document.body.classList.toggle('simple',!!+s.simple);
   $('#backend').value=s.backend;$('#sbUrl').value=s.sbUrl||'';$('#sbKey').value=s.sbKey||'';
@@ -3198,7 +3247,9 @@ $('#backend').onchange=()=>{const c=$('#backend').value==='cloud';
   $('#cloudCfg').style.display=c?'':'none';
   $('#beHint').textContent=c?'Not connected yet — paste the URL and key, then Save & connect.':'Data stays in this browser.';};
 $('#saveSet').onclick=()=>{const s=DB.settings;
-  s.user=$('#sUser').value.trim();s.prefix=($('#sPrefix').value.trim()||'RM').toUpperCase();
+  s.user=$('#sUser').value.trim();
+  const tg=($('#sTag').value||'').trim().toUpperCase();
+  if(/^[A-Z]$/.test(tg)) s.devTag=tg;s.prefix=($('#sPrefix').value.trim()||'RM').toUpperCase();
   s.cur=$('#sCur').value.trim()||'₹';s.expDays=Math.max(1,parseInt($('#sExp').value)||30);
   s.beep=+$('#sBeep').value;s.simple=+$('#sSimple').value;
   document.body.classList.toggle('simple',!!s.simple);
@@ -3242,6 +3293,17 @@ $('#replaceCloud').onclick=async()=>{
   DB.outbox=[]; saveNow();
   try{ await SB.pull(true); persistLocal(); render(); toast('Replaced from the cloud'); }
   catch(e){ toast('Could not reach the cloud',true); }
+};
+$('#renPrint').onclick=()=>{
+  const cells=[];
+  (DB.renamed||[]).forEach(r=>{const b=batch(r.to); const it=b?item(b.code):null;
+    if(it) cells.push(labelHTML(b,it,false));});
+  if(!cells.length){toast('Those packs are no longer here',true);return;}
+  printCells(cells);
+};
+$('#renDone').onclick=()=>{
+  if(!confirm('Clear the reprint list?\n\nOnly do this once the new stickers are on the packs.'))return;
+  DB.renamed=[]; saveNow(); render();
 };
 $('#qNow').onclick=()=>{
   /* put anything set aside back in the queue and try the lot again */
@@ -3714,6 +3776,19 @@ function renderStatus(){
   const bt=document.getElementById('stBuild'); if(bt) bt.textContent='build '+BUILD;
   const b2=document.getElementById('stBuild2'); if(b2) b2.textContent=BUILD;
   $('#beHint').textContent = SB.on ? (SB.ok?'Connected.':'Not connected — check the URL and key.') : 'Data stays in this browser.';
+  const rb=document.getElementById('renBox');
+  const ren=(DB.renamed||[]);
+  if(rb){
+    rb.style.display=ren.length?'':'none';
+    if(ren.length){
+      document.getElementById('renSum').innerHTML='<b>'+ren.length+' pack'+(ren.length===1?'':'s')
+        +'</b> had to be renamed because another device had already used the code. '
+        +'The stickers already printed for the old codes are wrong — reprint these and replace them.';
+      document.getElementById('renList').innerHTML=ren.slice(-20).map(r=>
+        '<div class="code" style="font-size:12.5px;padding:3px 0">'
+        +esc(r.from)+' &rarr; <b>'+esc(r.to)+'</b></div>').join('');
+    }
+  }
   const qb=document.getElementById('qBox');
   if(qb){
     if(!q.length&&!stuck.length){ qb.style.display='none'; }
@@ -3755,7 +3830,7 @@ function render(){renderStock();renderItems();dPackShow();renderLabels();renderL
   const s=await Local.load();
   if(s&&Array.isArray(s.items)){
     DB={items:s.items,batches:s.batches||[],moves:s.moves||[],seq:s.seq||s.items.length+1,
-        outbox:s.outbox||[], tomb:s.tomb||[], stuck:s.stuck||[],
+        outbox:s.outbox||[], tomb:s.tomb||[], stuck:s.stuck||[], renamed:s.renamed||[],
         settings:Object.assign(DB.settings,s.settings||{})};
   }
   /* Anything parked by an older build: items become updates, everything
