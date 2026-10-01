@@ -910,6 +910,8 @@ body.smopen{overflow:hidden}
     </div>
     <div class="row mt">
       <button class="btn blue" id="saveBackend">Save &amp; connect</button>
+      <button class="btn ghost" id="fixDevice"
+        data-tip="Clear the mess|Collapses a runaway reprint list, clears errors and retries everything. Nothing is deleted.">Tidy up &amp; retry</button>
       <button class="btn ghost" id="cloudCount"
         data-tip="Compare|Counts the rows on the server and on this device, so you can see at once if anything is missing.">Compare with cloud</button>
       <button class="btn red" id="replaceCloud"
@@ -919,6 +921,12 @@ body.smopen{overflow:hidden}
       <button class="btn ghost" id="testBackend" data-tip="Test the connection|Checks the URL and key without saving anything.">Test connection</button>
       <button class="btn ghost" id="pushLocal" data-tip="Upload once|Copies this device into the shared database. Run it from one device only, or codes will clash.">Upload this device to cloud</button>
     </div>
+  </div>
+
+  <div class="card" id="clashBox" style="display:none;border-left:5px solid var(--error)">
+    <h2 class="sec">Pack codes that need a decision</h2>
+    <p class="hint" id="clashSum" style="margin:-6px 0 10px"></p>
+    <div id="clashList"></div>
   </div>
 
   <div class="card" id="renBox" style="display:none;border-left:5px solid var(--error)">
@@ -1142,7 +1150,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-09-29.30';
+const BUILD='2026-09-30.33';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1262,7 +1270,7 @@ const SB={
       whole:!!r.whole_only, serial:!!r.tracked, packSet:!!r.pack_set}));
     DB.batches=batches.map(r=>({bcode:r.batch_code,code:r.item_code,ven:r.vendor||'',lot:r.lot_no||'',
       recv:r.received_on||'',exp:r.expiry||'',rate:+r.rate||0,
-      qty0:+r.pack_size||0, printed:r.printed_at||null}));
+      qty0:+r.pack_size||0, printed:r.printed_at||null, uid:r.uid||''}));
     const sMoves=moves.map(r=>({id:r.id,ts:r.created_at,bcode:r.batch_code||'',code:r.item_code,
       type:r.kind,qty:+r.qty,note:r.note||'',user:r.operator||''}));
     const sItems=DB.items, sBatches=DB.batches;   /* already mapped above */
@@ -1307,7 +1315,7 @@ const itemRow=it=>({code:it.code,name:it.name,category:it.cat,unit:it.unit,min_q
   whole_only:!!it.whole,tracked:!!it.serial,pack_set:!!it.packSet});
 const batchRow=b=>({batch_code:b.bcode,item_code:b.code,vendor:b.ven||null,lot_no:b.lot||null,
   received_on:b.recv||null,expiry:b.exp||null,rate:b.rate||0,
-  pack_size:b.qty0||0,printed_at:b.printed||null});
+  pack_size:b.qty0||0,printed_at:b.printed||null,uid:b.uid||null});
 const moveRow=m=>({id:m.id,item_code:m.code,batch_code:m.bcode||null,kind:m.type,
   qty:m.qty,note:m.note||null,operator:m.user||null,created_at:m.ts});
 
@@ -1361,8 +1369,10 @@ async function rawSend(op){
    the same next code while offline. Only the second is a real clash. */
 async function sameBatch(row){
   try{
-    const got=await SB.get('batches?select=item_code,pack_size,received_on&batch_code=eq.'+encodeURIComponent(row.batch_code));
+    const got=await SB.get('batches?select=item_code,pack_size,received_on,uid&batch_code=eq.'+encodeURIComponent(row.batch_code));
     const g=got&&got[0]; if(!g) return false;
+    /* a pack carries its own permanent id, so our own retry is exact */
+    if(row.uid&&g.uid) return g.uid===row.uid;
     return g.item_code===row.item_code && (+g.pack_size||0)===(+row.pack_size||0)
       && String(g.received_on||'')===String(row.received_on||'');
   }catch(e){ return null; }
@@ -1377,14 +1387,39 @@ async function sameItem(row){
 /* Two devices booked in the same next code while one was offline. Give
    ours a fresh code, move every reference across, and ask for a reprint. */
 async function resolveBatchClash(op){
+  const old=op.val, icode=op.row.item_code;
+
+  /* A pack is only ever renamed ONCE. If the new code clashes too, the
+     situation is not something renaming can fix, so it is set aside for
+     a person rather than retried forever. */
+  if(op.renamed){ op.err='Renamed once already and still refused — needs a look'; return false; }
+  if((DB.renamed||[]).length>=25){
+    op.err='Too many renames at once — stopped on purpose'; return false;
+  }
+
+  /* Move it into THIS device's own code space. Nothing another device
+     can produce lives there, so the new code cannot clash even if the
+     server is unreachable and we are guessing. */
+  const tag=devTag();
   let server=[];
-  try{ server=await SB.get('batches?select=batch_code&item_code=eq.'+encodeURIComponent(op.row.item_code)); }catch(e){}
-  const old=op.val;
-  const taken=new Set(server.map(r=>r.batch_code).concat(DB.batches.map(b=>b.bcode)));
-  const pre=op.row.item_code+'-';
+  try{ server=await SB.getAll('batches?select=batch_code&item_code=eq.'+encodeURIComponent(icode),'batch_code.asc'); }
+  catch(e){ server=[]; }
+
+  const taken=new Set();
+  server.forEach(r=>taken.add(r.batch_code));
+  DB.batches.forEach(b=>taken.add(b.bcode));
+  DB.moves.forEach(m=>{ if(m.bcode) taken.add(m.bcode); });
+  outbox().forEach(o=>{ taken.add(o.val); if(o.row&&o.row.batch_code) taken.add(o.row.batch_code); });
+  /* every code this device has ever handed out or vacated is off limits,
+     which is what stops two packs swapping places */
+  (DB.renamed||[]).forEach(r=>{ taken.add(r.from); taken.add(r.to); });
+  (DB.usedCodes||[]).forEach(c=>taken.add(c));
+
+  const pre=icode+'-'+tag;
   let n=0,code;
   do{ let t='',v=n; do{t=B36[v%36]+t;v=Math.floor(v/36);}while(v>0);
-      while(t.length<2)t='0'+t; code=pre+t; n++; }while(taken.has(code));
+      code=pre+t; n++; }while(taken.has(code)&&n<100000);
+
   const b=DB.batches.find(x=>x.bcode===old);
   if(b){ b.bcode=code; b.printed=null; }
   DB.moves.forEach(m=>{ if(m.bcode===old) m.bcode=code; });
@@ -1392,12 +1427,15 @@ async function resolveBatchClash(op){
     if(o.val===old) o.val=code;
     if(o.row&&o.row.batch_code===old) o.row.batch_code=code;
   });
-  op.row.batch_code=code; op.val=code;
-  /* collected quietly — an alert here would freeze the queue until
-     somebody tapped OK, which is worse than the clash itself */
-  DB.renamed=(DB.renamed||[]).concat([{from:old,to:code,at:nowISO()}]).slice(-200);
+  op.row.batch_code=code; op.val=code; op.renamed=true;
+
+  DB.usedCodes=(DB.usedCodes||[]).concat([old,code]).slice(-5000);
+  /* collapse a chain so the list shows the original sticker, not the hops */
+  const chain=(DB.renamed||[]).find(r=>r.to===old);
+  if(chain){ chain.to=code; chain.at=nowISO(); }
+  else DB.renamed=(DB.renamed||[]).concat([{from:old,to:code,at:nowISO()}]).slice(-200);
   saveNow(); render();
-  toast((DB.renamed.length)+' pack'+(DB.renamed.length===1?'':'s')+' renamed — reprint needed',true);
+  return true;
 }
 
 let flushing=false, flushTimer=null, backoff=2000;
@@ -1434,9 +1472,21 @@ async function flush(){
       if(res.status===409||/23505|duplicate key/i.test(res.text)){
         if(op.t==='batches'&&op.k==='insert'){
           const same=await sameBatch(op.row);
-          if(same===null){ flushSoon(backoff); return; }   /* network, not a refusal */
-          if(same){ q.shift(); saveNow(); continue; }
-          await resolveBatchClash(op); continue;     /* retry under the new code */
+          if(same===null){
+            op.tries++;
+            if(op.tries<4){ backoff=Math.min(backoff*2,30000); flushSoon(backoff); return; }
+            /* still cannot check: set it aside rather than guess */
+            op.err='Could not check whether '+op.val+' is already on the server';
+            q.shift(); DB.stuck=(DB.stuck||[]).concat([op]).slice(-500);
+            saveNow(); renderStatus(); continue;
+          }
+          if(same){ q.shift(); saveNow(); continue; }   /* our own retry */
+          /* A genuinely different pack owns this code. The sticker is already
+             on a roll, so the app will NOT quietly change it — that is for a
+             person to decide, on the Setup screen. */
+          op.err='clash';
+          q.shift(); DB.stuck=(DB.stuck||[]).concat([op]).slice(-500);
+          saveNow(); renderStatus(); continue;
         }
         if(op.t==='items'){ op.k='upsert'; saveNow(); continue; }   /* ours: just update it */
         q.shift(); saveNow(); continue;
@@ -2576,7 +2626,7 @@ $('#saveDel').onclick=async()=>{
     if(n>200&&!confirm('Create '+n+' separate '+packName(it,n)+', each with its own code and label?'))return;
     const sz=per||packSize(it);
     for(let k=0;k<n;k++){
-      const bb=Object.assign({bcode:nextBatchCode(it.code),code:it.code,qty0:sz},meta);
+      const bb=Object.assign({bcode:nextBatchCode(it.code),code:it.code,qty0:sz,uid:uid()},meta);
       DB.batches.push(bb); made.push(bb);
       await pushBatch(bb);
       await pushMove({id:uid(),ts:nowISO(),bcode:bb.bcode,code:it.code,type:'IN',
@@ -2584,7 +2634,7 @@ $('#saveDel').onclick=async()=>{
     }
     lastMove=null;
   }else{
-    const bb=Object.assign({bcode:nextBatchCode(it.code),code:it.code,qty0:q},meta);
+    const bb=Object.assign({bcode:nextBatchCode(it.code),code:it.code,qty0:q,uid:uid()},meta);
     DB.batches.push(bb); made.push(bb); await pushBatch(bb);
     const mv={id:uid(),ts:nowISO(),bcode:bb.bcode,code:it.code,type:'IN',qty:q,note:note,user:DB.settings.user||'—'};
     await pushMove(mv); lastMove=mv;
@@ -3268,6 +3318,25 @@ $('#saveBackend').onclick=async()=>{
         : 'Could not connect: '+m.slice(0,60), true); } }
   else { render(); toast('Using this device only'); }
 };
+$('#fixDevice').onclick=()=>{
+  /* collapse rename chains, drop the ones that ended where they started */
+  const used=new Set(DB.usedCodes||[]); const first={}, out=[];
+  (DB.renamed||[]).forEach(r=>{ used.add(r.from); used.add(r.to); });
+  (DB.renamed||[]).forEach(r=>{ const root=first[r.from]!==undefined?first[r.from]:r.from;
+    first[r.to]=root; const seen=out.find(x=>x.from===root);
+    if(seen) seen.to=r.to; else out.push({from:root,to:r.to,at:r.at}); });
+  const live=new Set(DB.batches.map(b=>b.bcode));
+  DB.renamed=out.filter(r=>r.from!==r.to&&live.has(r.to));
+  DB.usedCodes=[...used].slice(-5000);
+  /* put non-clash failures back in the queue */
+  const back=(DB.stuck||[]).filter(o=>o.err!=='clash');
+  DB.stuck=(DB.stuck||[]).filter(o=>o.err==='clash');
+  back.forEach(o=>{o.err=null;o.tries=0;if(o.t==='items')o.k='upsert';});
+  DB.outbox=back.concat(outbox());
+  saveNow(); render(); flushSoon(0);
+  toast('Tidied — '+DB.renamed.length+' reprint'+(DB.renamed.length===1?'':'s')+', '
+    +outbox().length+' to send, '+(DB.stuck||[]).length+' awaiting a decision');
+};
 $('#cloudCount').onclick=async()=>{
   if(!SB.on){toast('Not connected',true);return;}
   toast('Counting…');
@@ -3776,6 +3845,38 @@ function renderStatus(){
   const bt=document.getElementById('stBuild'); if(bt) bt.textContent='build '+BUILD;
   const b2=document.getElementById('stBuild2'); if(b2) b2.textContent=BUILD;
   $('#beHint').textContent = SB.on ? (SB.ok?'Connected.':'Not connected — check the URL and key.') : 'Data stays in this browser.';
+  const cb=document.getElementById('clashBox');
+  const clashes=(DB.stuck||[]).filter(o=>o.err==='clash');
+  if(cb){
+    cb.style.display=clashes.length?'':'none';
+    if(clashes.length){
+      document.getElementById('clashSum').innerHTML='<b>'+clashes.length+' pack'+(clashes.length===1?'':'s')
+        +'</b> could not be sent because another device already uses that code for a different pack. '
+        +'Nothing has been changed automatically — the stickers on your rolls are still valid until you choose.';
+      document.getElementById('clashList').innerHTML=clashes.slice(0,15).map((o,ix)=>{
+        const b=DB.batches.find(x=>x.bcode===o.val);
+        return `<div style="padding:9px 0;border-bottom:1px solid var(--outline-var)">
+          <div class="code" style="font-size:13px"><b>${esc(o.val)}</b>${b?' · '+esc(fmt(b.qty0||0))+' per pack · '+esc(b.recv||''):''}</div>
+          <div class="row" style="margin-top:6px">
+            <button class="btn ghost sm" data-cs="${ix}">Same pack — already sent</button>
+            <button class="btn sm" data-cn="${ix}">New code &amp; reprint</button>
+          </div></div>`;}).join('')
+        +(clashes.length>15?'<div class="hint">…and '+(clashes.length-15)+' more</div>':'');
+      document.getElementById('clashList').querySelectorAll('[data-cs]').forEach(bt=>bt.onclick=()=>{
+        const o=clashes[+bt.dataset.cs];
+        DB.stuck=(DB.stuck||[]).filter(x=>x!==o); saveNow(); render(); toast('Marked as already sent');
+      });
+      document.getElementById('clashList').querySelectorAll('[data-cn]').forEach(bt=>bt.onclick=async()=>{
+        const o=clashes[+bt.dataset.cn];
+        if(!confirm('Give this pack a new code?\n\n'+o.val+' will be renamed and the sticker already on the roll '
+          +'becomes wrong. You will need to print a new one and replace it.'))return;
+        DB.stuck=(DB.stuck||[]).filter(x=>x!==o);
+        o.err=null; o.tries=0;
+        const moved=await resolveBatchClash(o);
+        if(moved){ outbox().unshift(o); saveNow(); render(); flushSoon(0); }
+      });
+    }
+  }
   const rb=document.getElementById('renBox');
   const ren=(DB.renamed||[]);
   if(rb){
@@ -3831,12 +3932,30 @@ function render(){renderStock();renderItems();dPackShow();renderLabels();renderL
   if(s&&Array.isArray(s.items)){
     DB={items:s.items,batches:s.batches||[],moves:s.moves||[],seq:s.seq||s.items.length+1,
         outbox:s.outbox||[], tomb:s.tomb||[], stuck:s.stuck||[], renamed:s.renamed||[],
+        usedCodes:s.usedCodes||[],
         settings:Object.assign(DB.settings,s.settings||{})};
   }
   /* Anything parked by an older build: items become updates, everything
      else is simply retried. Nothing is discarded. */
   if(DB.outbox&&DB.outbox.length){
     DB.outbox.forEach(o=>{ if(o.err){ o.err=null; o.tries=0; if(o.t==='items') o.k='upsert'; } });
+  }
+  /* An older build could rename two packs into each other's codes over and
+     over. Collapse those chains to one line each and remember every code
+     they touched so none of it gets handed out again. */
+  if(DB.renamed&&DB.renamed.length){
+    const used=new Set(DB.usedCodes||[]);
+    const first={}, out=[];
+    DB.renamed.forEach(r=>{ used.add(r.from); used.add(r.to); });
+    DB.renamed.forEach(r=>{
+      const root=first[r.from]!==undefined?first[r.from]:r.from;
+      first[r.to]=root;
+      const seen=out.find(x=>x.from===root);
+      if(seen) seen.to=r.to; else out.push({from:root,to:r.to,at:r.at});
+    });
+    /* a pack that ended up back where it started never needed a reprint */
+    DB.renamed=out.filter(r=>r.from!==r.to);
+    DB.usedCodes=[...used].slice(-5000);
   }
   loadSettings(); loadSheet();
   document.body.classList.toggle('simple',!!+DB.settings.simple);
