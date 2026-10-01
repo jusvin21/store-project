@@ -1150,7 +1150,7 @@ function qrSVG(t){const g=qrMatrix(t);if(!g)return '<svg viewBox="0 0 10 10"></s
    Stock on hand is never stored. It is always the sum of the
    movement log, so the numbers can always be explained.
    ============================================================ */
-const BUILD='2026-09-30.33';
+const BUILD='2026-09-30.34';
 const LK='storectl:v2';
 let DB={items:[],batches:[],moves:[],seq:1,
         settings:{prefix:'RM',cur:'₹',expDays:30,user:'',beep:1,simple:0,backend:'local',sbUrl:'',sbKey:'',
@@ -1541,10 +1541,20 @@ function stockMaps(){
 }
 const item=c=>DB.items.find(i=>i.code.toUpperCase()===String(c).trim().toUpperCase())||null;
 const batch=c=>DB.batches.find(b=>b.bcode.toUpperCase()===String(c).trim().toUpperCase())||null;
+/* A pack that had to be renamed still answers to the code printed on the
+   sticker already stuck to it. No reprint is needed just to keep scanning. */
+function aliasOf(c){
+  const u=String(c).trim().toUpperCase();
+  const r=(DB.renamed||[]).find(x=>String(x.from).toUpperCase()===u);
+  return r?r.to:null;
+}
 function resolve(code){
   const c=String(code).trim();
   const b=batch(c); if(b) return {kind:'batch',batch:b,item:item(b.code)};
   const i=item(c);  if(i) return {kind:'item',batch:null,item:i};
+  const alt=aliasOf(c);
+  if(alt){ const ab=batch(alt);
+    if(ab) return {kind:'batch',batch:ab,item:item(ab.code),oldCode:c}; }
   return null;
 }
 /* ---------- packs ----------
@@ -1836,6 +1846,7 @@ async function handleCode(raw){
 
   const onHand=byItem[it.code]||0;
   const avail = b ? (byBatch[b.bcode]||0) : onHand;
+  if(res.oldCode) toast('Sticker shows '+res.oldCode+' — this pack is now '+b.bcode,false);
 
   /* Only warn when the item was never configured AND its category expects a
      pack. An item somebody deliberately set to loose is simply loose. */
@@ -3884,7 +3895,8 @@ function renderStatus(){
     if(ren.length){
       document.getElementById('renSum').innerHTML='<b>'+ren.length+' pack'+(ren.length===1?'':'s')
         +'</b> had to be renamed because another device had already used the code. '
-        +'The stickers already printed for the old codes are wrong — reprint these and replace them.';
+        +'<b>The old stickers still scan</b> — the app recognises both codes — so this is tidying up, not urgent. '
+        +'Reprint when convenient so the sticker matches what the app shows.';
       document.getElementById('renList').innerHTML=ren.slice(-20).map(r=>
         '<div class="code" style="font-size:12.5px;padding:3px 0">'
         +esc(r.from)+' &rarr; <b>'+esc(r.to)+'</b></div>').join('');
